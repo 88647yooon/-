@@ -1,0 +1,25 @@
+{
+  "name": "family-midterm",
+  "version": "1.0.0",
+  "description": "The Family 통합 정보시스템 (202211207)",
+  "main": "app.js",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 'tests/*.test.js'",
+    "start": "node app.js",
+    "reset": "node app.js --reset"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "ejs": "^7.0.1",
+    "express": "^5.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.11.2",
+    "mysql2": "^3.24.6",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1"
+  }
+}
