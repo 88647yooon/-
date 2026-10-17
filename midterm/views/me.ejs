@@ -1,0 +1,126 @@
+<%- include('partials/head') %>
+<h1>내 정보</h1>
+<div class="cols">
+  <section class="card">
+    <h2>계정 <span class="tag">FR-02</span></h2>
+    <dl class="facts">
+      <dt>이름</dt><dd><%= profile.name %> <span class="muted">@<%= profile.username %></span></dd>
+      <dt>별명</dt><dd><%= profile.nickname || '-' %></dd>
+      <dt>전화번호</dt><dd><%= profile.phone || '-' %></dd>
+      <dt>이메일</dt><dd><%= profile.email || '-' %></dd>
+      <dt>역할</dt><dd><span class="badge role"><%= profile.roleLabel %></span> <span class="muted">순위 <%= profile.rank === null ? '없음 (운영 계층 밖)' : profile.rank %></span></dd>
+      <dt>상태</dt><dd><span class="badge status-<%= profile.status %>"><%= profile.statusLabel %></span></dd>
+      <dt>마지막 로그인</dt><dd><%= fmt(profile.lastLoginAt) %></dd>
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>현재 소속 <span class="tag">FR-02</span></h2>
+    <dl class="facts">
+      <dt>정식 소속</dt>
+      <dd>
+        <% if (profile.crew) { %>
+          <a href="/crews/<%= profile.crew.id %>"><%= profile.crew.name %></a> <span class="muted"><%= fmt(profile.crew.joinedAt) %>부터</span>
+        <% } else { %><span class="muted">없음</span><% } %>
+      </dd>
+      <dt>책임자</dt><dd><%- include('partials/who', { u: profile.crew ? profile.crew.capo : null }) %></dd>
+      <dt>임시 소속</dt>
+      <dd>
+        <% if (profile.temporaryCrews.length) { %>
+          <% profile.temporaryCrews.forEach((c, i) => { %><%= i ? ', ' : '' %><a href="/crews/<%= c.id %>"><%= c.name %></a><% }) %>
+        <% } else { %><span class="muted">없음</span><% } %>
+      </dd>
+      <dt>맡은 Crew</dt>
+      <dd>
+        <% if (profile.leadership.capoOf) { %>책임자: <a href="/crews/<%= profile.leadership.capoOf.id %>"><%= profile.leadership.capoOf.name %></a><br><% } %>
+        <% if (profile.leadership.underbossOf.length) { %>
+          담당 Underboss: <% profile.leadership.underbossOf.forEach((c, i) => { %><%= i ? ', ' : '' %><a href="/crews/<%= c.id %>"><%= c.name %></a><% }) %>
+        <% } %>
+        <% if (!profile.leadership.capoOf && !profile.leadership.underbossOf.length) { %><span class="muted">없음</span><% } %>
+      </dd>
+    </dl>
+  </section>
+</div>
+
+<section class="card">
+  <h2>정보 변경 <span class="tag">FR-01</span></h2>
+  <div class="forms">
+    <form method="post" action="/me/profile">
+      <h3>연락처·별명 수정</h3>
+      <div class="form-row">
+        <label>별명 <input name="nickname" maxlength="50" placeholder="<%= profile.nickname || '' %>"></label>
+        <label>전화번호 <input name="phone" placeholder="<%= profile.phone || '010-0000-0000' %>"></label>
+        <label>이메일 <input name="email" type="email" placeholder="<%= profile.email || 'me@family.local' %>"></label>
+      </div>
+      <button>수정</button>
+      <p class="hint">입력한 항목만 바뀌고, 바뀐 값은 변경 전후가 활동 기록에 남습니다. 이름·역할·상태는 관리자가 바꿉니다.</p>
+    </form>
+    <form method="post" action="/me/password">
+      <h3>비밀번호 변경</h3>
+      <div class="form-row">
+        <label>현재 비밀번호 <input name="currentPassword" type="password" autocomplete="current-password" required></label>
+        <label>새 비밀번호 <input name="newPassword" type="password" autocomplete="new-password" required></label>
+      </div>
+      <button>변경</button>
+      <p class="hint">8~72자, 영문자와 숫자를 포함해야 합니다. 바꾸면 지금 사용 중인 세션만 남고 다른 기기의 세션은 종료됩니다.</p>
+    </form>
+  </div>
+</section>
+
+<div class="cols">
+  <section class="card">
+    <h2>로그인 세션 <span class="tag">NFR-03</span></h2>
+    <table>
+      <thead><tr><th>기기</th><th>IP</th><th>마지막 사용</th><th></th></tr></thead>
+      <tbody>
+        <% sessions.forEach((s) => { %>
+          <tr>
+            <td class="small"><%= (s.userAgent || '-').slice(0, 60) %></td>
+            <td class="mono small"><%= s.ip || '-' %></td>
+            <td><%= fmt(s.lastUsedAt) %></td>
+            <td><% if (s.current) { %><span class="badge ok">현재 세션</span><% } %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <form method="post" action="/me/sessions/revoke" class="form-row">
+      <button class="danger small">모든 세션 종료 (다시 로그인 필요)</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>사용할 수 있는 기능 <span class="tag">FR-02 · NFR-03</span></h2>
+    <p class="section-note muted"><%= permissions.roleLabel %> 역할에 허용된 권한입니다. 서버는 화면과 별개로 모든 요청에서 이 권한을 다시 검사합니다.</p>
+    <ul class="small">
+      <% permissions.permissions.forEach((p) => { %><li><code><%= p.key %></code> <%= p.description %></li><% }) %>
+    </ul>
+  </section>
+</div>
+
+<section class="card">
+  <h2>내 Crew 소속 신청 <span class="tag">FR-02 · FR-06</span></h2>
+  <% if (joinRequests.length) { %>
+    <table>
+      <thead><tr><th>Crew</th><th>유형</th><th>상태</th><th>신청일</th><th>처리 결과</th><th></th></tr></thead>
+      <tbody>
+        <% joinRequests.forEach((r) => { %>
+          <tr>
+            <td><a href="/crews/<%= r.crew.id %>"><%= r.crew.name %></a></td>
+            <td><%= r.typeLabel %></td>
+            <td><span class="badge status-<%= r.status === 'PENDING' ? 'PENDING' : (r.status === 'APPROVED' ? 'ACTIVE' : 'WITHDRAWN') %>"><%= r.statusLabel %></span></td>
+            <td><%= fmt(r.createdAt) %></td>
+            <td class="small"><%= r.decisionReason || '-' %></td>
+            <td>
+              <% if (r.status === 'PENDING') { %>
+                <form method="post" action="/crews/<%= r.crew.id %>/join-requests/<%= r.id %>/cancel"><button class="ghost small">신청 취소</button></form>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } else { %>
+    <p class="muted">아직 낸 신청이 없습니다. Crew 상세 화면에서 소속을 신청할 수 있습니다.</p>
+  <% } %>
+</section>
+<%- include('partials/foot') %>

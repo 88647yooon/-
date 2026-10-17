@@ -1,0 +1,69 @@
+<%- include('partials/head') %>
+<h1>Crew <span class="tag">FR-05 · FR-21</span></h1>
+
+<section class="card">
+  <form method="get" action="/crews" class="form-row">
+    <label>검색 <input name="q" value="<%= query.q || '' %>" placeholder="이름·설명"></label>
+    <label>지역 <input name="region" value="<%= query.region || '' %>" placeholder="예: 서울 강북"></label>
+    <label>상태
+      <select name="status">
+        <option value="">전체</option>
+        <% Object.entries(C.CREW_STATUS_INFO).forEach(([key, info]) => { %>
+          <option value="<%= key %>" <%= query.status === key ? 'selected' : '' %>><%= info.label %></option>
+        <% }) %>
+      </select>
+    </label>
+    <label>정렬
+      <select name="sort">
+        <% [['name', '이름순'], ['-memberCount', '인원 많은 순'], ['region', '지역순'], ['-createdAt', '최근 생성순']].forEach(([value, label]) => { %>
+          <option value="<%= value %>" <%= query.sort === value ? 'selected' : '' %>><%= label %></option>
+        <% }) %>
+      </select>
+    </label>
+    <button>조회</button>
+  </form>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Crew</th><th>지역</th><th>상태</th><th>책임자(Capo)</th><th>담당 Underboss</th><th>인원 (정식/임시)</th></tr></thead>
+      <tbody>
+        <% crews.forEach((c) => { %>
+          <tr>
+            <td><a href="/crews/<%= c.id %>"><%= c.name %></a></td>
+            <td><%= c.region %></td>
+            <td><span class="badge status-<%= c.status %>"><%= c.statusLabel %></span></td>
+            <td><%- include('partials/who', { u: c.capo }) %></td>
+            <td><%- include('partials/who', { u: c.underboss }) %></td>
+            <td><%= c.memberCount %>명 (<%= c.regularCount %>/<%= c.temporaryCount %>)</td>
+          </tr>
+        <% }) %>
+        <% if (!crews.length) { %><tr><td colspan="6" class="muted">조건에 맞는 Crew가 없습니다.</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+  <%- include('partials/pager', { meta }) %>
+</section>
+
+<% if (can('crew.create')) { %>
+  <section class="card">
+    <h2>Crew 생성 <span class="tag">FR-05</span></h2>
+    <form method="post" action="/crews">
+      <div class="form-row">
+        <label>이름 <input name="name" required maxlength="50"></label>
+        <label>지역 <input name="region" required maxlength="50" placeholder="예: 서울 강동"></label>
+        <label>설명 <input name="description" maxlength="500"></label>
+        <% if (me.role === 'BOSS') { %>
+          <label>담당 Underboss
+            <select name="underbossId">
+              <option value="">나중에 지정</option>
+              <% underbosses.forEach((u) => { %><option value="<%= u.id %>"><%= u.name %> (@<%= u.username %>)</option><% }) %>
+            </select>
+          </label>
+        <% } %>
+      </div>
+      <button>생성</button>
+      <p class="hint"><%= me.role === 'UNDERBOSS' ? '만든 Crew의 담당 Underboss는 본인이 됩니다. ' : '' %>책임자는 Crew를 만든 뒤 상세 화면에서 지정합니다.</p>
+    </form>
+  </section>
+<% } %>
+<%- include('partials/foot') %>

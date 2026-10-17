@@ -1,0 +1,321 @@
+// 웹 화면 (CR-02, EJS 서버 사이드 렌더링). 단계 1·2의 기능 요구사항을 브라우저에서 확인할 수 있게 한다.
+// 화면은 REST API와 같은 서비스 계층을 호출하므로, 권한 검사(NFR-03)와 업무 규칙(BR-01·BR-04·BR-05)이 API와 똑같이 적용된다.
+const config = require('../config');
+const seedData = require('../models/seedData');
+const userModel = require('../models/sql/userModel');
+const membershipModel = require('../models/sql/membershipModel');
+const authService = require('../services/authService');
+const meService = require('../services/meService');
+const userService = require('../services/userService');
+const crewService = require('../services/crewService');
+const membershipService = require('../services/membershipService');
+const joinRequestService = require('../services/joinRequestService');
+const roleRequestService = require('../services/roleRequestService');
+const { setLoginCookie, clearLoginCookie, setFlash, safeNext, backPath } = require('../middlewares/web');
+const { CHECKS, SCENARIOS } = require('./webGuide');
+const { contextOf } = require('../utils/context');
+const { notFound } = require('../utils/errors');
+
+// 권한이 없어 볼 수 없는 영역은 화면 전체를 막지 않고 그 자리에 이유를 보여 준다.
+async function optional(load) {
+  try {
+    return { ok: true, value: await load() };
+  } catch (err) {
+    if (err.status === 403 || err.status === 404) return { ok: false, message: err.message };
+    throw err;
+  }
+}
+const denied = (message) => ({ ok: false, message });
+
+// 화면에서는 구성원을 아이디로 입력받는다.
+async function userIdOf(username) {
+  const user = await userModel.findByUsername(username);
+  if (!user) throw notFound(`아이디가 '${username}'인 구성원을 찾을 수 없습니다.`);
+  return user.id;
+}
+
+// 폼 처리 공통: 서비스를 호출하고 결과 메시지를 남긴 뒤 원래 화면(또는 지정한 화면)으로 돌아간다.
+// 실패하면 webErrorHandler가 오류 메시지를 남기고 원래 화면으로 돌려보낸다.
+const action = (handle) => async (req, res) => {
+  const { message, redirect, type = 'success' } = await handle(req, res);
+  setFlash(res, type, message);
+  res.redirect(redirect ?? backPath(req) ?? '/');
+};
+
+const nothingChanged = { type: 'info', message: '바꿀 항목을 입력하세요.' };
+
+// ---------------------------------------------------------------------------
+// 홈·로그인
+
+async function home(req, res) {
+  res.render('home', {
+    title: '홈',
+    profile: req.user ? await meService.getMe(req.user) : null,
+    checks: CHECKS,
+    scenarios: SCENARIOS,
+    accounts: seedData.users,
+    seedCrews: seedData.crews,
+    seedPassword: config.seedPassword,
+  });
+}
+
+function loginPage(req, res) {
+  const next = safeNext(req.query.next);
+  if (req.user) return res.redirect(next);
+  return res.render('login', { title: '로그인', next, accounts: seedData.users, seedPassword: config.seedPassword });
+}
+
+async function login(req, res) {
+  const { username, password, next } = req.valid.body;
+  const result = await authService.login({ username, password }, contextOf(req));
+  // 다른 계정으로 바꿔 로그인하면 이전 세션은 끝낸다.
+  if (req.user) await authService.logout(req.user, req.sessionId);
+  setLoginCookie(res, result);
+  setFlash(res, 'success', `${result.user.name}(${result.user.roleLabel})님으로 로그인했습니다.`);
+  res.redirect(safeNext(next));
+}
+
+async function logout(req, res) {
+  if (req.user) await authService.logout(req.user, req.sessionId);
+  clearLoginCookie(res);
+  setFlash(res, 'success', '로그아웃했습니다.');
+  res.redirect('/');
+}
+
+// ---------------------------------------------------------------------------
+// 내 정보
+
+async function mePage(req, res) {
+  const [profile, permissions, sessions, joinRequests] = await Promise.all([
+    meService.getMe(req.user),
+    meService.getPermissions(req.user),
+    authService.listSessions(req.user, req.sessionId),
+    joinRequestService.listMine(req.user, { page: 1, size: 20 }),
+  ]);
+  res.render('me', { title: '내 정보', profile, permissions, sessions, joinRequests: joinRequests.data });
+}
+
+const updateProfile = action(async (req) => {
+  if (Object.keys(req.valid.body).length === 0) return nothingChanged;
+  await meService.updateMe(req.user, req.valid.body, contextOf(req));
+  return { message: '연락처·별명을 수정했습니다.' };
+});
+
+const changePassword = action(async (req) => {
+  const result = await meService.changePassword(req.user, req.sessionId, req.valid.body, contextOf(req));
+  return { message: `비밀번호를 바꿨습니다. 다른 기기의 로그인 세션 ${result.revokedSessionCount}개를 종료했습니다.` };
+});
+
+async function revokeSessions(req, res) {
+  const { revokedCount } = await authService.revokeAllSessions(req.user, contextOf(req));
+  clearLoginCookie(res);
+  setFlash(res, 'success', `로그인 세션 ${revokedCount}개를 모두 종료했습니다. 다시 로그인하세요.`);
+  res.redirect('/login');
+}
+
+// ---------------------------------------------------------------------------
+// 구성원
+
+async function usersPage(req, res) {
+  const query = req.valid.query;
+  const [result, crews] = await Promise.all([
+    userService.list(req.user, query),
+    crewService.list(req.user, { page: 1, size: 100, sort: 'name' }),
+  ]);
+  res.render('users', { title: '구성원', users: result.data, meta: result.meta, query, crews: crews.data });
+}
+
+const createUser = action(async (req) => {
+  const user = await userService.create(req.user, req.valid.body, contextOf(req));
+  return { message: `${user.name}(${user.username})님을 Associate·대기 상태로 등록했습니다.`, redirect: `/users/${user.id}` };
+});
+
+async function userPage(req, res) {
+  const { userId } = req.valid.params;
+  const user = await userService.get(req.user, userId);
+  const [chain, memberships, subordinates] = await Promise.all([
+    optional(() => userService.chainOfCommand(req.user, userId)),
+    optional(() => userService.memberships(req.user, userId, { page: 1, size: 50 })),
+    optional(() => userService.subordinates(req.user, userId, { page: 1, size: 50, sort: '-rank' })),
+  ]);
+  res.render('user', { title: user.name, user, chain, memberships, subordinates });
+}
+
+const updateUser = action(async (req) => {
+  if (Object.keys(req.valid.body).length === 0) return nothingChanged;
+  await userService.update(req.user, req.valid.params.userId, req.valid.body, contextOf(req));
+  return { message: '기본 정보를 수정했습니다.' };
+});
+
+const changeRole = action(async (req) => {
+  const user = await userService.changeRole(req.user, req.valid.params.userId, req.valid.body, contextOf(req));
+  return { message: `${user.name}님의 역할을 ${user.roleLabel}(으)로 바꿨습니다.` };
+});
+
+const changeStatus = action(async (req) => {
+  const user = await userService.changeStatus(req.user, req.valid.params.userId, req.valid.body, contextOf(req));
+  return { message: `${user.name}님의 상태를 ${user.statusLabel}(으)로 바꿨습니다.` };
+});
+
+const recommendRole = action(async (req) => {
+  const request = await roleRequestService.create(req.user, { userId: req.valid.params.userId, ...req.valid.body }, contextOf(req));
+  return { message: `${request.user.name}님의 역할을 ${request.toRoleLabel}(으)로 바꾸도록 요청했습니다. Underboss·Boss가 승인하면 반영됩니다.` };
+});
+
+const deleteUser = action(async (req) => {
+  await userService.remove(req.user, req.valid.params.userId, contextOf(req));
+  return { message: '구성원을 삭제했습니다.', redirect: '/users' };
+});
+
+// ---------------------------------------------------------------------------
+// Crew
+
+async function crewsPage(req, res) {
+  const query = req.valid.query;
+  const [result, underbosses] = await Promise.all([
+    crewService.list(req.user, query),
+    userModel.listByRole('UNDERBOSS', { status: 'ACTIVE' }),
+  ]);
+  res.render('crews', { title: 'Crew', crews: result.data, meta: result.meta, query, underbosses });
+}
+
+const createCrew = action(async (req) => {
+  const crew = await crewService.create(req.user, req.valid.body, contextOf(req));
+  return { message: `'${crew.name}' Crew를 만들었습니다.`, redirect: `/crews/${crew.id}` };
+});
+
+async function crewPage(req, res) {
+  const { crewId } = req.valid.params;
+  const { can } = res.locals;
+  const crew = await crewService.get(req.user, crewId);
+  const [hierarchy, members, history, capoHistory, joinRequests, activeCrews, myMembership] = await Promise.all([
+    optional(() => crewService.hierarchy(req.user, crewId)),
+    optional(() => membershipService.listMembers(req.user, crewId, { page: 1, size: 100, sort: '-rank' })),
+    optional(() => membershipService.history(req.user, crewId, { page: 1, size: 30 })),
+    can('crew.capoHistory.read')
+      ? optional(() => crewService.capoHistory(req.user, crewId, { page: 1, size: 20 }))
+      : denied('Capo 이상만 볼 수 있습니다.'),
+    can('crew.joinRequest.review')
+      ? optional(() => joinRequestService.listForCrew(req.user, crewId, { page: 1, size: 30 }))
+      : denied('Crew 책임자와 Underboss·Boss만 볼 수 있습니다.'),
+    crewService.list(req.user, { status: 'ACTIVE', page: 1, size: 100, sort: 'name' }),
+    membershipModel.findActive(crewId, req.user.id),
+  ]);
+  res.render('crew', {
+    title: crew.name, crew, hierarchy, members, history, capoHistory, joinRequests,
+    isMember: Boolean(myMembership),
+    otherCrews: activeCrews.data.filter((c) => c.id !== crew.id),
+  });
+}
+
+const crewAction = (handle) => action(async (req) => handle(req, req.valid.params.crewId, contextOf(req)));
+
+const updateCrew = crewAction(async (req, crewId, ctx) => {
+  if (Object.keys(req.valid.body).length === 0) return nothingChanged;
+  await crewService.update(req.user, crewId, req.valid.body, ctx);
+  return { message: 'Crew 정보를 수정했습니다.' };
+});
+
+const changeCrewStatus = crewAction(async (req, crewId, ctx) => {
+  const crew = await crewService.changeStatus(req.user, crewId, req.valid.body, ctx);
+  return { message: `'${crew.name}' Crew를 ${crew.statusLabel} 상태로 바꿨습니다.` };
+});
+
+const assignCapo = crewAction(async (req, crewId, ctx) => {
+  const { username, reason } = req.valid.body;
+  const crew = await crewService.assignCapo(req.user, crewId, { userId: await userIdOf(username), reason }, ctx);
+  return { message: `${crew.capo.name}님을 책임자로 지정했습니다.` };
+});
+
+const removeCapo = crewAction(async (req, crewId, ctx) => {
+  await crewService.removeCapo(req.user, crewId, ctx);
+  return { message: '책임자 지정을 해제했습니다. 해제된 구성원은 정식 소속원으로 남습니다.' };
+});
+
+const assignUnderboss = crewAction(async (req, crewId, ctx) => {
+  const crew = await crewService.assignUnderboss(req.user, crewId, { userId: await userIdOf(req.valid.body.username) }, ctx);
+  return { message: `${crew.underboss.name}님을 담당 Underboss로 지정했습니다.` };
+});
+
+const mergeCrew = crewAction(async (req, crewId, ctx) => {
+  const result = await membershipService.merge(req.user, { sourceCrewId: crewId, ...req.valid.body }, ctx);
+  return {
+    message: `'${result.sourceCrew.name}' Crew를 '${result.targetCrew.name}'에 병합했습니다. ${result.movedCount}명을 옮겼습니다.`,
+    redirect: `/crews/${result.targetCrew.id}`,
+  };
+});
+
+const deleteCrew = crewAction(async (req, crewId, ctx) => {
+  await crewService.remove(req.user, crewId, ctx);
+  return { message: 'Crew를 삭제했습니다.', redirect: '/crews' };
+});
+
+const addMember = crewAction(async (req, crewId, ctx) => {
+  const { username, type, note } = req.valid.body;
+  const membership = await membershipService.addMember(req.user, crewId, { userId: await userIdOf(username), type, note }, ctx);
+  return { message: `${membership.user.name}님을 ${membership.typeLabel} 소속으로 편성했습니다.` };
+});
+
+const changeMemberType = crewAction(async (req, crewId, ctx) => {
+  const membership = await membershipService.changeType(req.user, crewId, req.valid.params.userId, req.valid.body, ctx);
+  return { message: `${membership.user.name}님을 ${membership.typeLabel} 소속으로 바꿨습니다.` };
+});
+
+const removeMember = crewAction(async (req, crewId, ctx) => {
+  const membership = await membershipService.removeMember(req.user, crewId, req.valid.params.userId, ctx);
+  return { message: `${membership.user.name}님을 Crew에서 제외했습니다. 소속 기록은 이력에 남습니다.` };
+});
+
+const transferMember = crewAction(async (req, crewId, ctx) => {
+  const membership = await membershipService.transfer(req.user, crewId, req.valid.params.userId, req.valid.body, ctx);
+  return { message: `${membership.user.name}님을 '${membership.crew.name}' Crew로 이동했습니다.` };
+});
+
+const applyJoin = crewAction(async (req, crewId, ctx) => {
+  const request = await joinRequestService.apply(req.user, crewId, req.valid.body, ctx);
+  return { message: `'${request.crew.name}' Crew에 ${request.typeLabel} 소속을 신청했습니다. 책임자의 승인을 기다립니다.` };
+});
+
+const approveJoin = crewAction(async (req, crewId, ctx) => {
+  const request = await joinRequestService.approve(req.user, crewId, req.valid.params.requestId, ctx);
+  return { message: `${request.applicant.name}님의 소속 신청을 승인하고 ${request.typeLabel} 소속으로 편성했습니다.` };
+});
+
+const rejectJoin = crewAction(async (req, crewId, ctx) => {
+  const request = await joinRequestService.reject(req.user, crewId, req.valid.params.requestId, req.valid.body, ctx);
+  return { message: `${request.applicant.name}님의 소속 신청을 거절했습니다.` };
+});
+
+const cancelJoin = crewAction(async (req, crewId, ctx) => {
+  await joinRequestService.cancel(req.user, crewId, req.valid.params.requestId, ctx);
+  return { message: '소속 신청을 취소했습니다.' };
+});
+
+// ---------------------------------------------------------------------------
+// 역할 변경 요청
+
+async function roleRequestsPage(req, res) {
+  const query = req.valid.query;
+  const result = await roleRequestService.list(req.user, query);
+  res.render('role-requests', { title: '역할 변경 요청', requests: result.data, meta: result.meta, query });
+}
+
+const approveRoleRequest = action(async (req) => {
+  const request = await roleRequestService.approve(req.user, req.valid.params.requestId, contextOf(req));
+  return { message: `요청을 승인해 ${request.user.name}님의 역할을 ${request.toRoleLabel}(으)로 바꿨습니다.` };
+});
+
+const rejectRoleRequest = action(async (req) => {
+  const request = await roleRequestService.reject(req.user, req.valid.params.requestId, req.valid.body, contextOf(req));
+  return { message: `${request.user.name}님에 대한 역할 변경 요청을 거절했습니다.` };
+});
+
+module.exports = {
+  home, loginPage, login, logout,
+  mePage, updateProfile, changePassword, revokeSessions,
+  usersPage, createUser, userPage, updateUser, changeRole, changeStatus, recommendRole, deleteUser,
+  crewsPage, createCrew, crewPage, updateCrew, changeCrewStatus, assignCapo, removeCapo, assignUnderboss,
+  mergeCrew, deleteCrew, addMember, changeMemberType, removeMember, transferMember,
+  applyJoin, approveJoin, rejectJoin, cancelJoin,
+  roleRequestsPage, approveRoleRequest, rejectRoleRequest,
+};

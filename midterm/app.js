@@ -23,6 +23,7 @@ async function main() {
   const seeded = await seed();
   console.log(`[DB] MySQL ${config.mysql.database}, MongoDB 연결 완료${reset ? ' (초기화함)' : ''}`);
   if (seeded.users > 0) console.log(`[DB] 시드 계정 ${seeded.users}개 생성 (비밀번호: ${config.seedPassword})`);
+  if (seeded.crews > 0) console.log(`[DB] 시드 Crew ${seeded.crews}개와 소속·신청·요청 생성`);
 
   // Express 5는 listen 실패 시에도 콜백을 오류와 함께 호출한다.
   const server = createApp().listen(config.port, (err) => {

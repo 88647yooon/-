@@ -1,9 +1,11 @@
-// 내 정보 API (API 목록표 단계 1: #6~#9)
+// 내 정보 API (API 목록표 단계 1: #6~#9, 단계 2: #50)
 const express = require('express');
 const meController = require('../controllers/meController');
+const joinRequestController = require('../controllers/joinRequestController');
 const { validate } = require('../middlewares/validate');
 const { authenticate } = require('../middlewares/authenticate');
 const { requirePermission } = require('../middlewares/authorize');
+const { paging, enums } = require('./rules');
 
 const router = express.Router();
 router.use(authenticate);
@@ -15,17 +17,10 @@ router.use(authenticate);
  *     tags: [내 정보]
  *     summary: 내 정보 조회
  *     description: |
- *       [FR-02] 로그인한 사용자의 계정, 역할, 상태를 조회한다.
+ *       [FR-02] 로그인한 사용자의 계정, 역할, 상태와 현재 소속을 조회한다.
+ *       정식 소속 Crew와 그 책임자(crew), 임시 소속 Crew(temporaryCrews), 내가 맡고 있는 Crew(leadership)를 함께 보여 준다.
  *     responses:
- *       200:
- *         description: 조회 성공
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 data: { $ref: '#/components/schemas/User' }
+ *       200: { $ref: '#/components/responses/MeOne' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  *   patch:
@@ -46,15 +41,7 @@ router.use(authenticate);
  *               phone: { type: string, nullable: true, example: '010-1234-5678' }
  *               email: { type: string, nullable: true, format: email, example: 'me@family.local' }
  *     responses:
- *       200:
- *         description: 수정 성공. 수정된 내 정보를 돌려준다
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success: { type: boolean, example: true }
- *                 data: { $ref: '#/components/schemas/User' }
+ *       200: { $ref: '#/components/responses/MeOne' }
  *       400: { $ref: '#/components/responses/BadRequest' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
@@ -167,5 +154,29 @@ router.put(
  *       403: { $ref: '#/components/responses/Forbidden' }
  */
 router.get('/permissions', requirePermission('me.read'), meController.getPermissions);
+
+/**
+ * @openapi
+ * /api/me/join-requests:
+ *   get:
+ *     tags: [내 정보]
+ *     summary: 내 Crew 소속 신청 현황
+ *     description: |
+ *       [FR-02, FR-06] 내가 여러 Crew에 낸 소속 신청과 처리 결과(승인·거절·취소, 거절 사유)를 최근 순으로 돌려준다.
+ *     parameters:
+ *       - $ref: '#/components/parameters/RequestStatusFilter'
+ *       - $ref: '#/components/parameters/Page'
+ *       - $ref: '#/components/parameters/Size'
+ *     responses:
+ *       200: { $ref: '#/components/responses/JoinRequestPage' }
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ */
+router.get(
+  '/join-requests',
+  requirePermission('me.read'),
+  validate({ query: { status: enums.requestStatus, ...paging() } }),
+  joinRequestController.listMine,
+);
 
 module.exports = router;

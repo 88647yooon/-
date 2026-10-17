@@ -27,4 +27,13 @@ const notFound = (message = '대상을 찾을 수 없습니다.') =>
 const ruleViolation = (ruleId, message, details = null) =>
   new AppError(409, ruleId, message, details);
 
-module.exports = { AppError, badRequest, unauthenticated, forbidden, notFound, ruleViolation };
+// 대상의 현재 상태와 맞지 않는 요청 (이미 해산된 Crew, 허용되지 않는 상태 전이 등)
+// 중복 값은 code를 'DUPLICATE'로 준다.
+const conflict = (message, details = null, code = 'CONFLICT') =>
+  new AppError(409, code, message, details);
+
+// 일괄 처리에서 한 건이라도 실패해 전체를 취소한 경우. details에 행별 오류(code 포함)를 담는다.
+const bulkRejected = (total, rows) =>
+  new AppError(409, 'BULK_REJECTED', `${total}건 중 ${rows.length}건이 처리될 수 없어 전체를 취소했습니다.`, rows);
+
+module.exports = { AppError, badRequest, unauthenticated, forbidden, notFound, ruleViolation, conflict, bulkRejected };

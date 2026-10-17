@@ -15,6 +15,8 @@ const activityLogSchema = new mongoose.Schema(
       id: { type: String, required: true },
       label: String,
     },
+    // 함께 영향을 받은 대상. 예: 소속 변경은 target이 구성원이고 related에 Crew가 들어간다.
+    related: [{ _id: false, entity: String, id: String, label: String }],
     before: mongoose.Schema.Types.Mixed,
     after: mongoose.Schema.Types.Mixed,
     reason: String,
@@ -24,6 +26,7 @@ const activityLogSchema = new mongoose.Schema(
 );
 
 activityLogSchema.index({ 'target.entity': 1, 'target.id': 1, createdAt: -1 });
+activityLogSchema.index({ 'related.entity': 1, 'related.id': 1, createdAt: -1 });
 activityLogSchema.index({ 'actor.userId': 1, createdAt: -1 });
 activityLogSchema.index({ action: 1, createdAt: -1 });
 

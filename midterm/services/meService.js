@@ -1,18 +1,39 @@
 // 내 정보 조회·수정, 비밀번호 변경, 사용 가능 기능 조회 (FR-01, FR-02).
-// 단계 2에서 현재 Crew 소속 정보를 getMe에 추가한다.
 const bcrypt = require('bcryptjs');
 const config = require('../config');
 const { withTransaction } = require('../config/database');
 const userModel = require('../models/sql/userModel');
+const crewModel = require('../models/sql/crewModel');
+const membershipModel = require('../models/sql/membershipModel');
 const sessionModel = require('../models/sql/sessionModel');
 const auditService = require('./auditService');
 const permissionService = require('./permissionService');
-const { presentUser } = require('./presenters');
+const { loadRefs } = require('./refs');
+const { presentUser, userBrief, crewBrief } = require('./presenters');
 const { ROLE_INFO } = require('../config/constants');
 const { badRequest } = require('../utils/errors');
 
+// 내 계정 정보와 현재 소속(정식 Crew와 그 책임자, 임시 소속), 내가 맡은 Crew
 async function getMe(user) {
-  return presentUser(await userModel.findById(user.id));
+  const [me, memberships, capoOf, underbossOf] = await Promise.all([
+    userModel.findById(user.id),
+    membershipModel.listActiveByUser(user.id),
+    crewModel.findByCapo(user.id),
+    crewModel.listByUnderboss(user.id),
+  ]);
+  const refs = await loadRefs({ crewIds: memberships.map((m) => m.crewId) });
+  const regular = memberships.find((m) => m.type === 'REGULAR');
+  const regularCrew = regular ? refs.crews.get(regular.crewId) : null;
+  const capo = regularCrew?.capoId ? await userModel.findById(regularCrew.capoId) : null;
+
+  return {
+    ...presentUser(me),
+    crew: regular ? { ...crewBrief(regularCrew), membershipId: regular.id, joinedAt: regular.joinedAt, capo: userBrief(capo) } : null,
+    temporaryCrews: memberships
+      .filter((m) => m.type === 'TEMPORARY')
+      .map((m) => ({ ...crewBrief(refs.crews.get(m.crewId)), membershipId: m.id, joinedAt: m.joinedAt })),
+    leadership: { capoOf: crewBrief(capoOf), underbossOf: underbossOf.map(crewBrief) },
+  };
 }
 
 async function updateMe(user, changes, ctx) {
@@ -32,7 +53,7 @@ async function updateMe(user, changes, ctx) {
       actor: user, action: 'USER_PROFILE_UPDATED', target: auditService.userTarget(current), before, after, ip: ctx.ip,
     });
   }
-  return presentUser(await userModel.findById(user.id));
+  return getMe(user);
 }
 
 // 비밀번호를 바꾸면 지금 쓰는 세션만 남기고 다른 기기의 세션은 모두 종료한다.

@@ -21,4 +21,41 @@ const users = [
   { username: 'withdrawn1', name: 'Rocco Bruno', role: 'SOLDIER', status: 'WITHDRAWN' },
 ];
 
-module.exports = { users };
+// Crew와 소속. members: [아이디, 소속 유형]. soldier1은 Northside 정식 + Southside 임시 소속이다 (BR-01 확인용).
+// associate2는 어느 Crew에도 소속되지 않은 활동중 구성원이다 (편성·소속 신청 확인용).
+const crews = [
+  {
+    name: 'Northside',
+    region: '서울 강북',
+    description: '강북 지역을 맡는 Crew',
+    capo: 'capo1',
+    underboss: 'underboss1',
+    members: [['capo1', 'REGULAR'], ['soldier1', 'REGULAR'], ['soldier2', 'REGULAR'], ['associate1', 'REGULAR'], ['suspended1', 'REGULAR']],
+  },
+  {
+    name: 'Southside',
+    region: '서울 강남',
+    description: '강남 지역을 맡는 Crew',
+    capo: 'capo2',
+    underboss: 'underboss1',
+    members: [['capo2', 'REGULAR'], ['soldier3', 'REGULAR'], ['soldier1', 'TEMPORARY']],
+  },
+  {
+    name: 'Harbor',
+    region: '부산',
+    description: '부산 항만 지역을 맡는 Crew',
+    capo: 'capo3',
+    underboss: 'underboss2',
+    members: [['capo3', 'REGULAR'], ['soldier4', 'REGULAR']],
+  },
+];
+
+// 처리 대기 중인 소속 신청과 역할 변경 요청 (승인·거절 확인용)
+const joinRequests = [
+  { username: 'associate2', crew: 'Southside', type: 'REGULAR', message: 'Southside에서 활동하고 싶습니다.' },
+];
+const roleRequests = [
+  { username: 'associate1', requestedBy: 'capo1', toRole: 'SOLDIER', reason: '최근 맡은 일을 성실히 수행했습니다.' },
+];
+
+module.exports = { users, crews, joinRequests, roleRequests };

@@ -1,0 +1,14 @@
+<% if (flash) { %>
+  <div class="flash <%= flash.type %>" role="status">
+    <% if (flash.type === 'error' && flash.code) { %><span class="badge code"><%= flash.code %></span><% } %>
+    <% if (flash.rule) { %><span class="badge code"><%= flash.rule %></span><% } %>
+    <%= flash.message %>
+    <% if (flash.details && flash.details.length) { %>
+      <ul>
+        <% flash.details.forEach((d) => { %>
+          <li><%= String(d.field || '').replace(/^(form|body|query|params)\./, '') %>: <%= d.message %></li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </div>
+<% } %>

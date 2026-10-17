@@ -10,12 +10,13 @@
 | :--- | :--- |
 | 인증 | JWT 액세스 토큰(`Authorization: Bearer`) + 리프레시 토큰. 세션은 SQL `sessions` 테이블에 저장해 로그아웃·강제 종료를 지원한다. Swagger UI에는 `bearerAuth`를 설정한다. |
 | 역할 순위 | Associate(1) < Soldier(2) < Capo(3) < Underboss(4) < Boss(5). BR-04는 이 순위로 비교한다. |
-| Administrator | 운영 계층 밖의 기술 관리자. 계정·권한·감사·설정 기능을 담당하고 업무·평가 기능은 사용하지 않는다. 역할 변경은 가능하지만 Boss 지정·해제는 Boss만 할 수 있다. |
+| Administrator | 운영 계층 밖의 기술 관리자. 계정·권한·감사·설정 기능을 담당하고 업무·평가·Crew 편성·구성원 상태 변경은 하지 않는다. 역할 변경은 가능하지만 Boss 지정·해제는 Boss만 할 수 있다. |
+| 역할 변경 (BR-04) | 대상의 현재 역할이 요청자와 같거나 높으면 바꿀 수 없고, 요청자보다 높은 역할로 올릴 수도 없다. 구성원 정보 수정·상태 변경에도 같은 순위 규칙을 적용한다. |
 | 구성원 상태 | 대기, 활동중, 정지, 탈퇴. 정지·탈퇴는 새 업무 배정 불가 (BR-02). |
-| 소속 유형 | 정식, 임시. 정식 소속은 한 Crew만 가능 (BR-01). |
+| 소속 유형 | 정식, 임시. 정식 소속은 한 Crew만 가능 (BR-01). Crew에는 Associate·Soldier·Capo만 소속된다. |
 | 업무 상태 | 계획, 진행, 보류, 완료, 취소. 완료 후 핵심 결과 잠금 (BR-06). |
 | 자원 상태 | 사용가능, 사용중, 점검중, 사용불가. 점검중·사용불가는 배정 불가 (BR-08). |
-| Crew 관리 범위 | Crew마다 Capo 1명, 담당 Underboss 1명. Underboss는 여러 Crew를 담당한다. |
+| Crew 관리 범위 | Crew마다 Capo 1명, 담당 Underboss 1명. Underboss는 여러 Crew를 담당한다. 책임자(Capo)는 그 Crew의 정식 소속원이다. Underboss·Boss는 모든 Crew를 관리하고, Capo는 자신이 책임자인 Crew만 관리한다 (BR-05). |
 
 ### 권한 표기
 
@@ -41,8 +42,12 @@
 | 입력값 오류 | 400 | `VALIDATION_ERROR` |
 | 인증 없음·만료 | 401 | `UNAUTHENTICATED` |
 | 권한 부족 | 403 | `FORBIDDEN` |
+| 관리 범위·역할 순위 위반 | 403 | `FORBIDDEN` (`details.rule`에 `BR-05`·`BR-04`) |
 | 대상 없음 | 404 | `NOT_FOUND` |
-| 업무 규칙 위반 | 409 | 위반한 규칙 ID (예: `BR-03`) |
+| 업무 규칙 위반 | 409 | 위반한 규칙 ID (예: `BR-01`) |
+| 현재 상태와 충돌 (해산된 Crew, 허용되지 않는 상태 전이 등) | 409 | `CONFLICT` |
+| 중복 값 (아이디, Crew 이름) | 409 | `DUPLICATE` |
+| 일괄 처리 중 일부 실패로 전체 취소 | 409 | `BULK_REJECTED` (`details`에 행별 오류) |
 | 서버 오류 | 500 | `INTERNAL_ERROR` (프로세스는 종료하지 않음) |
 
 ## 3. 단계별 API 수
@@ -90,9 +95,9 @@
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
 | 10 | POST | `/api/users` | 구성원 등록 (초기 역할 Associate, 상태 대기) | FR-01 | U+, ADM | 2 |
 | 11 | POST | `/api/users/bulk` | 구성원 일괄 등록. 한 건이라도 실패하면 전체 취소하고 행별 오류 반환 | FR-01 | ADM | 2 |
-| 12 | GET | `/api/users` | 구성원 목록. 역할·상태·Crew 필터, 이름 검색, 정렬, 페이지. 요청자 권한별로 공개 필드 차등 | FR-01, FR-21, AR-03 | S+ | 2 |
+| 12 | GET | `/api/users` | 구성원 목록. 역할·상태·Crew 필터, 이름 검색, 정렬, 페이지. 요청자 권한별로 공개 필드 차등 | FR-01, FR-21, AR-03 | S+, ADM | 2 |
 | 13 | GET | `/api/users/check-username` | 아이디 사용 가능 여부 확인 | FR-01 | U+, ADM | 2 |
-| 14 | GET | `/api/users/:userId` | 구성원 상세. 요청자 권한별로 공개 필드 차등 | FR-01, FR-19 | S+, 본인 | 2 |
+| 14 | GET | `/api/users/:userId` | 구성원 상세. 요청자 권한별로 공개 필드 차등 | FR-01, FR-19 | S+, ADM, 본인 | 2 |
 | 15 | PATCH | `/api/users/:userId` | 기본 정보(이름, 연락처 등) 수정 | FR-01 | 담당 C, U+, ADM | 2 |
 | 16 | DELETE | `/api/users/:userId` | 잘못 등록된 구성원 삭제. 활동 기록이 있으면 409를 반환하고 탈퇴 처리를 안내 | FR-01 | ADM | 2 |
 | 17 | PATCH | `/api/users/:userId/role` | 역할 변경. 자신보다 높은 역할의 사용자는 변경 불가 | FR-03, BR-04 | U+, ADM | 2 |
@@ -113,7 +118,7 @@
 | 27 | PATCH | `/api/crews/:crewId` | 이름·지역·설명 수정 | FR-05 | 담당 C, U+ | 2 |
 | 28 | DELETE | `/api/crews/:crewId` | 구성원과 이력이 없는 Crew 삭제 | FR-05 | U+ | 2 |
 | 29 | PATCH | `/api/crews/:crewId/status` | 활성·해산 전환. 해산 시 모든 소속을 종료 (트랜잭션) | FR-05, FR-06 | U+ | 2 |
-| 30 | PUT | `/api/crews/:crewId/capo` | 책임자 지정·교체. 대상이 Capo 이상인지, BR-04 위반인지 검증 | FR-05, BR-04 | U+ | 2 |
+| 30 | PUT | `/api/crews/:crewId/capo` | 책임자 지정·교체. 대상은 활동중인 Capo 역할이어야 하고, 정식 소속이 없으면 이 Crew에 정식으로 함께 편성 (다른 Crew 정식 소속이면 BR-01) | FR-05, BR-04 | U+ | 2 |
 | 31 | DELETE | `/api/crews/:crewId/capo` | 책임자 해제 | FR-05 | U+ | 2 |
 | 32 | PUT | `/api/crews/:crewId/underboss` | 담당 Underboss 지정 | FR-05 | B | 2 |
 | 33 | GET | `/api/crews/:crewId/capo-history` | 책임자 교체 이력 | FR-05, BR-10 | C+ | 2 |
@@ -138,7 +143,7 @@
 
 | # | Method | URL | 기능 | 요구사항 | 권한 | 단계 |
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
-| 45 | POST | `/api/crews/:crewId/join-requests` | Crew 소속 신청 | FR-06 | 로그인 (정식 소속 없는 경우) | 2 |
+| 45 | POST | `/api/crews/:crewId/join-requests` | Crew 소속 신청 (정식 신청은 정식 소속이 없을 때만, BR-01) | FR-06 | A, S, C (본인) | 2 |
 | 46 | GET | `/api/crews/:crewId/join-requests` | 신청 목록 (상태 필터) | FR-06 | 담당 C, U+ | 2 |
 | 47 | POST | `/api/crews/:crewId/join-requests/:requestId/approve` | 승인 후 편성 (BR-01 재검증) | FR-06, BR-01, BR-05 | 담당 C, U+ | 2 |
 | 48 | POST | `/api/crews/:crewId/join-requests/:requestId/reject` | 거절 (사유 기록) | FR-06, BR-05 | 담당 C, U+ | 2 |
@@ -435,11 +440,19 @@
 
 ## 10. EJS 화면 (CR-02, API 개수에 포함하지 않음)
 
-| URL | 화면 | 요구사항 |
-| :--- | :--- | :--- |
-| `/login` | 로그인 | FR-02 |
-| `/dashboard` | 운영 현황 대시보드 (#185~#196 데이터 사용) | FR-22 |
-| `/me` | 내 정보·내 업무 | FR-02, FR-09 |
+화면은 REST API와 같은 서비스 계층을 호출하고, 각 폼 경로에는 같은 기능의 API와 똑같은 권한 키를 건다. 로그인 상태는 HttpOnly·SameSite=Lax 쿠키에 담은 JWT로 유지한다.
+
+| URL | 화면 | 요구사항 | 단계 |
+| :--- | :--- | :--- | :---: |
+| `/` | 홈: 단계별 기능 요구사항 확인 목록, 업무 규칙 확인 시나리오, 테스트 계정 바로 로그인 | — | 2 |
+| `/login` | 로그인 (테스트 계정 바로 로그인) | FR-02, NFR-03 | 2 |
+| `/me` | 내 정보: 계정·역할·상태·현재 소속, 연락처·비밀번호 변경, 로그인 세션, 사용 가능 기능, 내 소속 신청 | FR-01, FR-02, NFR-03 | 2 |
+| `/users` | 구성원 목록(필터·검색·정렬·페이지), 구성원 등록 | FR-01, FR-04, FR-21 | 2 |
+| `/users/:userId` | 구성원 상세: 현재 소속, 지휘 계통, 하위 구성원, 소속 이력, 기본 정보·역할·상태 변경, 역할 변경 추천, 삭제 | FR-01~FR-05, BR-04, BR-10 | 2 |
+| `/crews` | Crew 목록(필터·정렬·페이지), Crew 생성 | FR-05, FR-21 | 2 |
+| `/crews/:crewId` | Crew 상세: 조직도, 소속원, 편성·제외·유형 변경·이동, 소속 신청과 승인·거절, 책임자·Underboss 지정, 해산·병합·삭제, 편성·책임자 이력 | FR-05, FR-06, BR-01, BR-05, BR-10 | 2 |
+| `/role-requests` | 역할 변경 요청 목록과 승인·거절 | FR-03, BR-04 | 2 |
+| `/dashboard` | 운영 현황 대시보드 (#185~#196 데이터 사용) | FR-22 | 6 |
 
 ## 11. 중복 위험 검토 (AR-07)
 

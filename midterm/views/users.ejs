@@ -1,0 +1,79 @@
+<%- include('partials/head') %>
+<h1>구성원 <span class="tag">FR-01 · FR-04 · FR-21</span></h1>
+
+<section class="card">
+  <form method="get" action="/users" class="form-row">
+    <label>검색 <input name="q" value="<%= query.q || '' %>" placeholder="이름·아이디·별명"></label>
+    <label>역할
+      <select name="role">
+        <option value="">전체</option>
+        <% Object.entries(C.ROLE_INFO).forEach(([key, info]) => { %>
+          <option value="<%= key %>" <%= query.role === key ? 'selected' : '' %>><%= info.label %></option>
+        <% }) %>
+      </select>
+    </label>
+    <label>상태
+      <select name="status">
+        <option value="">전체</option>
+        <% Object.entries(C.MEMBER_STATUS_INFO).forEach(([key, info]) => { %>
+          <option value="<%= key %>" <%= query.status === key ? 'selected' : '' %>><%= info.label %></option>
+        <% }) %>
+      </select>
+    </label>
+    <label>Crew (현재 소속)
+      <select name="crewId">
+        <option value="">전체</option>
+        <% crews.forEach((c) => { %><option value="<%= c.id %>" <%= query.crewId === c.id ? 'selected' : '' %>><%= c.name %></option><% }) %>
+      </select>
+    </label>
+    <label>정렬
+      <select name="sort">
+        <% [['name', '이름순'], ['-rank', '역할 높은 순'], ['rank', '역할 낮은 순'], ['username', '아이디순'], ['-createdAt', '최근 등록순']].forEach(([value, label]) => { %>
+          <option value="<%= value %>" <%= query.sort === value ? 'selected' : '' %>><%= label %></option>
+        <% }) %>
+      </select>
+    </label>
+    <button>조회</button>
+  </form>
+  <p class="hint">보는 사람에 따라 공개 범위가 다릅니다. Soldier는 기본 정보만, Capo는 자기 Crew 소속원의 연락처까지, Underboss·Boss·Administrator는 전체를 봅니다.</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>아이디</th><th>이름</th><th>역할</th><th>상태</th><th>정식 소속</th><th>연락처</th><th>공개 범위</th></tr></thead>
+      <tbody>
+        <% users.forEach((u) => { %>
+          <tr>
+            <td class="mono"><a href="/users/<%= u.id %>"><%= u.username %></a></td>
+            <td><%= u.name %><%= u.nickname ? ` (${u.nickname})` : '' %></td>
+            <td><span class="badge role"><%= u.roleLabel %></span></td>
+            <td><span class="badge status-<%= u.status %>"><%= u.statusLabel %></span></td>
+            <td><% if (u.crew) { %><a href="/crews/<%= u.crew.id %>"><%= u.crew.name %></a><% } else { %><span class="muted">-</span><% } %></td>
+            <td class="small"><%= 'phone' in u ? (u.phone || '-') : '비공개' %></td>
+            <td class="small muted"><%= { basic: '기본', contact: '연락처 포함', full: '전체' }[u.visibility] %></td>
+          </tr>
+        <% }) %>
+        <% if (!users.length) { %><tr><td colspan="7" class="muted">조건에 맞는 구성원이 없습니다.</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+  <%- include('partials/pager', { meta }) %>
+</section>
+
+<% if (can('user.create')) { %>
+  <section class="card">
+    <h2>구성원 등록 <span class="tag">FR-01</span></h2>
+    <form method="post" action="/users">
+      <div class="form-row">
+        <label>아이디 <input name="username" required placeholder="new.member"></label>
+        <label>초기 비밀번호 <input name="password" required placeholder="영문+숫자 8자 이상"></label>
+        <label>이름 <input name="name" required maxlength="50"></label>
+        <label>별명 <input name="nickname" maxlength="50"></label>
+        <label>전화번호 <input name="phone" placeholder="010-0000-0000"></label>
+        <label>이메일 <input name="email" type="email"></label>
+      </div>
+      <button>등록</button>
+      <p class="hint">새 구성원은 Associate 역할, 대기 상태로 만들어집니다. 상세 화면에서 상태를 활동중으로 바꾸고 역할을 정하세요.</p>
+    </form>
+  </section>
+<% } %>
+<%- include('partials/foot') %>

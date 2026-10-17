@@ -1,0 +1,176 @@
+<%- include('partials/head') %>
+<h1><%= user.name %> <span class="muted small">@<%= user.username %></span></h1>
+
+<div class="cols">
+  <section class="card">
+    <h2>기본 정보 <span class="tag">FR-01</span></h2>
+    <dl class="facts">
+      <dt>역할</dt><dd><span class="badge role"><%= user.roleLabel %></span></dd>
+      <dt>상태</dt><dd><span class="badge status-<%= user.status %>"><%= user.statusLabel %></span></dd>
+      <dt>별명</dt><dd><%= user.nickname || '-' %></dd>
+      <% if ('phone' in user) { %>
+        <dt>전화번호</dt><dd><%= user.phone || '-' %></dd>
+        <dt>이메일</dt><dd><%= user.email || '-' %></dd>
+      <% } %>
+      <% if (user.visibility === 'full') { %>
+        <dt>마지막 로그인</dt><dd><%= fmt(user.lastLoginAt) %></dd>
+        <dt>등록일</dt><dd><%= fmt(user.createdAt) %></dd>
+      <% } %>
+    </dl>
+    <p class="hint">공개 범위: <%= { basic: '기본 (연락처·계정 정보 비공개)', contact: '연락처 포함', full: '전체' }[user.visibility] %></p>
+  </section>
+
+  <section class="card">
+    <h2>현재 소속 <span class="tag">FR-02 · FR-05</span></h2>
+    <% if (user.currentMemberships.length) { %>
+      <ul>
+        <% user.currentMemberships.forEach((m) => { %>
+          <li><a href="/crews/<%= m.crew.id %>"><%= m.crew.name %></a> <span class="badge"><%= m.typeLabel %></span> <span class="muted small"><%= fmt(m.joinedAt) %>부터</span></li>
+        <% }) %>
+      </ul>
+    <% } else { %><p class="muted">소속된 Crew가 없습니다.</p><% } %>
+    <h3>맡은 Crew</h3>
+    <% if (user.leadership.capoOf) { %><p>책임자: <a href="/crews/<%= user.leadership.capoOf.id %>"><%= user.leadership.capoOf.name %></a></p><% } %>
+    <% if (user.leadership.underbossOf.length) { %>
+      <p>담당 Underboss: <% user.leadership.underbossOf.forEach((c, i) => { %><%= i ? ', ' : '' %><a href="/crews/<%= c.id %>"><%= c.name %></a><% }) %></p>
+    <% } %>
+    <% if (!user.leadership.capoOf && !user.leadership.underbossOf.length) { %><p class="muted">없음</p><% } %>
+  </section>
+</div>
+
+<div class="cols">
+  <section class="card">
+    <h2>상위 지휘 계통 <span class="tag">FR-05</span></h2>
+    <% if (chain.ok) { %>
+      <% if (chain.value.chain.length) { %>
+        <ol>
+          <% chain.value.chain.forEach((c) => { %><li><span class="badge"><%= c.levelLabel %></span> <%- include('partials/who', { u: c.user }) %></li><% }) %>
+        </ol>
+      <% } else { %><p class="muted">상위 지휘 계통이 없습니다.</p><% } %>
+    <% } else { %><p class="denied"><%= chain.message %></p><% } %>
+  </section>
+
+  <section class="card">
+    <h2>지휘 하위 구성원 <span class="tag">FR-05</span></h2>
+    <% if (subordinates.ok) { %>
+      <% if (subordinates.value.data.length) { %>
+        <table>
+          <thead><tr><th>구성원</th><th>역할</th><th>Crew</th><th>관계</th></tr></thead>
+          <tbody>
+            <% subordinates.value.data.forEach((s) => { %>
+              <tr>
+                <td><%- include('partials/who', { u: s.user }) %></td>
+                <td><%= s.user.roleLabel %></td>
+                <td><%= s.user.crew ? s.user.crew.name : '-' %></td>
+                <td class="small"><%= { ORGANIZATION: '조직 전체', CREW_CAPO: 'Crew 책임자', CREW_MEMBER: 'Crew 소속원' }[s.relation] %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+        <p class="hint">총 <%= subordinates.value.meta.total %>명<%= subordinates.value.meta.total > subordinates.value.data.length ? ' (처음 ' + subordinates.value.data.length + '명 표시)' : '' %></p>
+      <% } else { %><p class="muted">지휘 하위 구성원이 없습니다.</p><% } %>
+    <% } else { %><p class="denied"><%= subordinates.message %></p><% } %>
+  </section>
+</div>
+
+<section class="card">
+  <h2>소속 이력 <span class="tag">FR-19 · BR-10</span></h2>
+  <% if (memberships.ok) { %>
+    <% if (memberships.value.data.length) { %>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Crew</th><th>유형</th><th>시작 경위</th><th>시작</th><th>종료</th><th>종료 이유</th><th>처리자</th></tr></thead>
+          <tbody>
+            <% memberships.value.data.forEach((m) => { %>
+              <tr>
+                <td><a href="/crews/<%= m.crew.id %>"><%= m.crew.name %></a><%= m.fromCrew ? ` ← ${m.fromCrew.name}` : '' %></td>
+                <td><%= m.typeLabel %></td>
+                <td class="small"><%= m.joinMethodLabel %></td>
+                <td><%= fmt(m.joinedAt) %></td>
+                <td><%= m.active ? '현재 소속' : fmt(m.leftAt) %></td>
+                <td class="small"><%= m.endReasonLabel || '-' %><%= m.toCrew ? ` → ${m.toCrew.name}` : '' %></td>
+                <td class="small"><%= m.endedBy ? m.endedBy.name : (m.addedBy ? m.addedBy.name : '-') %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %><p class="muted">소속 기록이 없습니다.</p><% } %>
+  <% } else { %><p class="denied"><%= memberships.message %></p><% } %>
+</section>
+
+<% const manage = can('user.update') || can('user.role.change') || can('user.status.change') || can('roleRequest.create') || can('user.delete'); %>
+<% if (manage && me.id !== user.id) { %>
+  <section class="card">
+    <h2>관리 <span class="tag">FR-01 · FR-03 · FR-04</span></h2>
+    <p class="section-note muted">권한 검사는 서버가 다시 합니다. 자신과 같거나 높은 역할의 구성원은 바꿀 수 없고(BR-04), Capo는 자기 Crew 소속원만 관리합니다(BR-05).</p>
+    <div class="forms">
+      <% if (can('user.update')) { %>
+        <form method="post" action="/users/<%= user.id %>/basic">
+          <h3>기본 정보 수정</h3>
+          <div class="form-row">
+            <label>이름 <input name="name" maxlength="50" placeholder="<%= user.name %>"></label>
+            <label>별명 <input name="nickname" maxlength="50" placeholder="<%= user.nickname || '' %>"></label>
+            <label>전화번호 <input name="phone" placeholder="010-0000-0000"></label>
+            <label>이메일 <input name="email" type="email"></label>
+          </div>
+          <button>수정</button>
+        </form>
+      <% } %>
+      <% if (can('user.role.change')) { %>
+        <form method="post" action="/users/<%= user.id %>/role">
+          <h3>역할 변경</h3>
+          <div class="form-row">
+            <label>새 역할
+              <select name="role">
+                <% Object.entries(C.ROLE_INFO).forEach(([key, info]) => { %><option value="<%= key %>" <%= key === user.role ? 'selected' : '' %>><%= info.label %></option><% }) %>
+              </select>
+            </label>
+            <label>사유 <input name="reason" maxlength="500"></label>
+          </div>
+          <button>역할 변경</button>
+          <p class="hint">자신보다 높은 역할로는 올릴 수 없고, Boss 지정·해제는 Boss만 할 수 있습니다.</p>
+        </form>
+      <% } %>
+      <% if (can('user.status.change')) { %>
+        <form method="post" action="/users/<%= user.id %>/status">
+          <h3>상태 변경</h3>
+          <div class="form-row">
+            <label>새 상태
+              <select name="status">
+                <% Object.entries(C.MEMBER_STATUS_INFO).forEach(([key, info]) => { %><option value="<%= key %>" <%= key === user.status ? 'selected' : '' %>><%= info.label %></option><% }) %>
+              </select>
+            </label>
+            <label>사유 <input name="reason" maxlength="500"></label>
+          </div>
+          <button>상태 변경</button>
+          <% const next = C.MEMBER_STATUS_INFO[user.status].next; %>
+          <p class="hint">지금(<%= user.statusLabel %>)에서 바꿀 수 있는 상태: <%= next.length ? next.map((s) => C.MEMBER_STATUS_INFO[s].label).join(', ') : '없음' %>. 정지·탈퇴하면 로그인 세션이 바로 끊기고, 탈퇴하면 모든 Crew 소속이 끝납니다.</p>
+        </form>
+      <% } %>
+      <% if (can('roleRequest.create')) { %>
+        <form method="post" action="/users/<%= user.id %>/role-request">
+          <h3>역할 변경 추천</h3>
+          <div class="form-row">
+            <label>추천 역할
+              <select name="role">
+                <% Object.entries(C.ROLE_INFO).forEach(([key, info]) => { %><option value="<%= key %>"><%= info.label %></option><% }) %>
+              </select>
+            </label>
+            <label>사유 <input name="reason" maxlength="500" required></label>
+          </div>
+          <button>추천</button>
+          <p class="hint">Capo는 자기 Crew 소속원을 Associate·Soldier·Capo로만 추천할 수 있습니다. Underboss·Boss가 승인하면 반영됩니다.</p>
+        </form>
+      <% } %>
+      <% if (can('user.delete')) { %>
+        <form method="post" action="/users/<%= user.id %>/delete">
+          <h3>삭제</h3>
+          <button class="danger">구성원 삭제</button>
+          <p class="hint">로그인한 적도, 소속·신청 기록도 없는 잘못 등록된 구성원만 삭제됩니다. 그 밖에는 상태를 탈퇴로 바꾸세요.</p>
+        </form>
+      <% } %>
+    </div>
+  </section>
+<% } %>
+<%- include('partials/foot') %>

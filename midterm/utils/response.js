@@ -7,4 +7,9 @@ function ok(res, data, { status = 200, meta } = {}) {
   return res.status(status).json(body);
 }
 
-module.exports = { ok };
+// 서비스가 돌려준 { data, meta } 목록 결과를 그대로 응답한다.
+const okPage = (res, { data, meta }) => ok(res, data, { meta });
+
+const created = (res, data) => ok(res, data, { status: 201 });
+
+module.exports = { ok, okPage, created };

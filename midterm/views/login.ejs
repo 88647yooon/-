@@ -1,0 +1,28 @@
+<%- include('partials/head') %>
+<section class="card narrow">
+  <h1>로그인</h1>
+  <form method="post" action="/login" class="stack">
+    <label>아이디 <input name="username" autocomplete="username" required></label>
+    <label>비밀번호 <input name="password" type="password" autocomplete="current-password" required></label>
+    <input type="hidden" name="next" value="<%= next %>">
+    <div><button>로그인</button></div>
+  </form>
+</section>
+
+<section class="card narrow">
+  <h2>테스트 계정으로 로그인</h2>
+  <p class="section-note muted">비밀번호는 모두 <code><%= seedPassword %></code>입니다. 정지·탈퇴 계정은 로그인이 거부됩니다.</p>
+  <div class="chips">
+    <% accounts.forEach((a) => { %>
+      <form method="post" action="/login">
+        <input type="hidden" name="username" value="<%= a.username %>">
+        <input type="hidden" name="password" value="<%= seedPassword %>">
+        <input type="hidden" name="next" value="<%= next %>">
+        <button class="chip small" title="<%= a.name %>">
+          <%= a.username %><span><%= C.ROLE_INFO[a.role].label %><%= a.status !== 'ACTIVE' ? ' · ' + C.MEMBER_STATUS_INFO[a.status].label : '' %></span>
+        </button>
+      </form>
+    <% }) %>
+  </div>
+</section>
+<%- include('partials/foot') %>

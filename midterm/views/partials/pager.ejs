@@ -1,0 +1,7 @@
+<% if (meta) { %>
+  <div class="pager">
+    <% if (meta.page > 1) { %><a href="<%= pageUrl(meta.page - 1) %>">‹ 이전</a><% } %>
+    <span><%= meta.page %> / <%= meta.totalPages %> 페이지 · 총 <%= meta.total %>건</span>
+    <% if (meta.page < meta.totalPages) { %><a href="<%= pageUrl(meta.page + 1) %>">다음 ›</a><% } %>
+  </div>
+<% } %>

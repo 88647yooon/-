@@ -9,6 +9,9 @@ const authService = require('../services/authService');
 const { unauthenticated } = require('../utils/errors');
 
 async function authenticate(req, res, next) {
+  // 같은 경로에 라우터 여러 개가 붙어 있어도 한 번만 검사한다.
+  if (req.user) return next();
+
   const [scheme, token] = (req.get('authorization') || '').split(' ');
   if (scheme !== 'Bearer' || !token) {
     throw unauthenticated('로그인이 필요합니다. Authorization 헤더에 "Bearer <accessToken>"을 넣어 주세요.');

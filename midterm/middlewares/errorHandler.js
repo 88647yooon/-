@@ -19,6 +19,12 @@ function normalize(err) {
   if (err.code === 'ER_DUP_ENTRY') {
     return new AppError(409, 'DUPLICATE', '이미 존재하는 값입니다.');
   }
+  if (err.code === 'ER_ROW_IS_REFERENCED_2' || err.code === 'ER_ROW_IS_REFERENCED') {
+    return new AppError(409, 'CONFLICT', '다른 데이터가 참조하고 있어 삭제할 수 없습니다.');
+  }
+  if (err.code === 'ER_LOCK_DEADLOCK' || err.code === 'ER_LOCK_WAIT_TIMEOUT') {
+    return new AppError(409, 'CONFLICT', '동시에 처리 중인 다른 요청과 충돌했습니다. 잠시 후 다시 시도해 주세요.');
+  }
   return new AppError(500, 'INTERNAL_ERROR', '서버 내부 오류가 발생했습니다.');
 }
 
@@ -39,4 +45,4 @@ async function errorHandler(err, req, res, next) {
   });
 }
 
-module.exports = { notFoundHandler, errorHandler };
+module.exports = { notFoundHandler, errorHandler, normalize };

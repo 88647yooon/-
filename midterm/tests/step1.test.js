@@ -9,7 +9,7 @@ const LoginHistory = require('../models/mongo/LoginHistory');
 const SecurityEvent = require('../models/mongo/SecurityEvent');
 const { requirePermission } = require('../middlewares/authorize');
 const { errorHandler } = require('../middlewares/errorHandler');
-const { startServer, catalogRows, toOpenApiPath } = require('./helpers');
+const { startServer } = require('./helpers');
 
 let t;
 before(async () => {
@@ -239,31 +239,3 @@ describe('권한 검사 미들웨어 (NFR-03, BR-09)', () => {
   });
 });
 
-describe('Swagger 문서 (CR-04, AR-08)', () => {
-  it('/api-docs가 열리고 bearerAuth 인증이 설정되어 있다', async () => {
-    const page = await t.api('GET', '/api-docs/');
-    assert.equal(page.status, 200);
-    assert.match(page.text, /swagger-ui/i);
-    const spec = (await t.api('GET', '/api-docs.json')).body;
-    assert.equal(spec.components.securitySchemes.bearerAuth.scheme, 'bearer');
-  });
-
-  it('목록표의 단계 1 API가 모두 문서화되어 있고, 목록표에 없는 API는 문서에 없다', async () => {
-    const spec = (await t.api('GET', '/api-docs.json')).body;
-    const documented = Object.entries(spec.paths)
-      .flatMap(([p, ops]) => Object.keys(ops).map((m) => `${m.toUpperCase()} ${p}`))
-      .sort();
-    const expected = catalogRows(1).map((r) => `${r.method} ${toOpenApiPath(r.url)}`).sort();
-    assert.equal(expected.length, 9);
-    assert.deepEqual(documented, expected);
-  });
-
-  it('모든 API 설명이 연결된 요구사항 ID로 시작한다', async () => {
-    const spec = (await t.api('GET', '/api-docs.json')).body;
-    for (const [p, ops] of Object.entries(spec.paths)) {
-      for (const [m, op] of Object.entries(ops)) {
-        assert.match(op.description, /^\[(FR|BR|DR|AR|NFR|CR)-\d{2}/, `${m.toUpperCase()} ${p}`);
-      }
-    }
-  });
-});

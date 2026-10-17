@@ -1,0 +1,120 @@
+<%- include('partials/head') %>
+<section class="hero">
+  <h1>The Family 통합 정보시스템</h1>
+  <p>구성원과 Crew, 업무, 공용 자원, 평가를 한곳에서 관리하는 웹 기반 통합 정보시스템입니다. <span class="muted">학번 202211207</span></p>
+  <p class="muted">
+    이 화면에서 단계 1·2의 기능 요구사항을 직접 확인할 수 있습니다. 화면은 REST API와 같은 서비스 계층을 쓰므로
+    권한 검사와 업무 규칙이 API와 똑같이 적용됩니다. 모든 API는 <a href="/api-docs">Swagger API 문서</a>에서 실행할 수 있습니다.
+  </p>
+</section>
+
+<% if (profile) { %>
+  <section class="card">
+    <h2>현재 로그인한 구성원</h2>
+    <dl class="facts">
+      <dt>이름</dt><dd><%= profile.name %> <span class="muted">@<%= profile.username %></span></dd>
+      <dt>역할</dt><dd><span class="badge role"><%= profile.roleLabel %></span></dd>
+      <dt>상태</dt><dd><span class="badge status-<%= profile.status %>"><%= profile.statusLabel %></span></dd>
+      <dt>정식 소속</dt>
+      <dd>
+        <% if (profile.crew) { %>
+          <a href="/crews/<%= profile.crew.id %>"><%= profile.crew.name %></a>
+          <span class="muted">· 책임자 <%= profile.crew.capo ? profile.crew.capo.name : '없음' %></span>
+        <% } else { %><span class="muted">없음</span><% } %>
+      </dd>
+    </dl>
+    <p><a class="button" href="/me">내 정보 보기</a></p>
+  </section>
+<% } else { %>
+  <section class="card">
+    <h2>로그인</h2>
+    <form method="post" action="/login" class="form-row">
+      <input name="username" placeholder="아이디 (예: boss)" autocomplete="username" required>
+      <input name="password" type="password" placeholder="비밀번호" autocomplete="current-password" required>
+      <input type="hidden" name="next" value="/">
+      <button>로그인</button>
+    </form>
+    <p class="hint">아래 테스트 계정 표의 [로그인] 버튼으로 바로 로그인할 수 있습니다. 테스트 계정의 비밀번호는 모두 <code><%= seedPassword %></code>입니다.</p>
+  </section>
+<% } %>
+
+<section class="card">
+  <h2>기능 요구사항 확인 (단계 1·2)</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>단계</th><th>요구사항</th><th>기능</th><th>확인 방법</th><th>관련 API</th><th></th></tr></thead>
+      <tbody>
+        <% checks.forEach((c) => { %>
+          <tr>
+            <td><%= c.step %></td>
+            <td><span class="badge code"><%= c.id %></span></td>
+            <td><%= c.title %></td>
+            <td><%= c.how %></td>
+            <td class="mono small"><%= c.api %></td>
+            <td><a href="<%= c.link %>">열기</a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card">
+  <h2>업무 규칙 확인 시나리오</h2>
+  <p class="section-note muted">시드 데이터 기준입니다. 데이터를 처음 상태로 되돌리려면 서버를 <code>node app.js --reset</code>으로 다시 시작하세요.</p>
+  <div class="scenarios">
+    <% scenarios.forEach((s) => { %>
+      <article class="scenario">
+        <h3><span class="badge code"><%= s.rule %></span> <%= s.title %></h3>
+        <ol><% s.steps.forEach((step) => { %><li><%= step %></li><% }) %></ol>
+      </article>
+    <% }) %>
+  </div>
+</section>
+
+<section class="card">
+  <h2>테스트 계정</h2>
+  <p class="section-note muted">정지·탈퇴 계정으로 로그인하면 거부되는 것도 확인할 수 있습니다.</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>아이디</th><th>이름</th><th>역할</th><th>상태</th><th></th></tr></thead>
+      <tbody>
+        <% accounts.forEach((a) => { %>
+          <tr>
+            <td class="mono"><%= a.username %></td>
+            <td><%= a.name %></td>
+            <td><%= C.ROLE_INFO[a.role].label %></td>
+            <td><span class="badge status-<%= a.status %>"><%= C.MEMBER_STATUS_INFO[a.status].label %></span></td>
+            <td>
+              <form method="post" action="/login">
+                <input type="hidden" name="username" value="<%= a.username %>">
+                <input type="hidden" name="password" value="<%= seedPassword %>">
+                <input type="hidden" name="next" value="/">
+                <button class="small">로그인</button>
+              </form>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>시드 Crew</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Crew</th><th>지역</th><th>책임자</th><th>담당 Underboss</th><th>소속원</th></tr></thead>
+      <tbody>
+        <% seedCrews.forEach((c) => { %>
+          <tr>
+            <td><%= c.name %></td>
+            <td><%= c.region %></td>
+            <td class="mono"><%= c.capo %></td>
+            <td class="mono"><%= c.underboss %></td>
+            <td class="mono small"><%= c.members.map(([u, t]) => (t === 'TEMPORARY' ? u + '(임시)' : u)).join(', ') %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</section>
+<%- include('partials/foot') %>

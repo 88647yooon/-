@@ -23,6 +23,56 @@ const MEMBER_STATUS_INFO = Object.freeze({
 const MEMBER_STATUS = Object.freeze(Object.fromEntries(Object.keys(MEMBER_STATUS_INFO).map((s) => [s, s])));
 const SIGN_IN_BLOCKED_STATUSES = Object.freeze([MEMBER_STATUS.SUSPENDED, MEMBER_STATUS.WITHDRAWN]);
 
+// Crew에 소속될 수 있는 역할. Underboss·Boss는 Crew 위의 계층이고 Administrator는 운영 계층 밖이다.
+const CREW_MEMBER_ROLES = Object.freeze(['ASSOCIATE', 'SOLDIER', 'CAPO']);
+
+const CREW_STATUS_INFO = Object.freeze({
+  ACTIVE: { label: '활성' },
+  DISBANDED: { label: '해산' },
+});
+
+// 소속 유형. 정식 소속은 한 Crew만 가능하다 (BR-01).
+const MEMBERSHIP_TYPE_INFO = Object.freeze({
+  REGULAR: { label: '정식' },
+  TEMPORARY: { label: '임시' },
+});
+
+// 소속이 시작된 경위
+const JOIN_METHOD_INFO = Object.freeze({
+  ADDED: { label: '편성' },
+  JOIN_REQUEST: { label: '소속 신청 승인' },
+  TRANSFER: { label: '다른 Crew에서 이동' },
+  MERGE: { label: 'Crew 병합' },
+  CAPO_ASSIGNMENT: { label: '책임자 지정' },
+  TYPE_CHANGE: { label: '소속 유형 변경' },
+});
+
+// 소속이 끝난 이유
+const MEMBERSHIP_END_REASON_INFO = Object.freeze({
+  REMOVED: { label: '제외' },
+  TRANSFERRED: { label: '다른 Crew로 이동' },
+  DISBANDED: { label: 'Crew 해산' },
+  MERGED: { label: 'Crew 병합' },
+  WITHDRAWN: { label: '구성원 탈퇴' },
+  TYPE_CHANGED: { label: '소속 유형 변경' },
+});
+
+// Crew 책임자(Capo) 임기가 끝난 이유
+const CAPO_TERM_END_REASON_INFO = Object.freeze({
+  REPLACED: { label: '교체' },
+  REMOVED: { label: '해제' },
+  DISBANDED: { label: 'Crew 해산' },
+  MERGED: { label: 'Crew 병합' },
+});
+
+// 소속 신청·역할 변경 요청의 처리 상태
+const REQUEST_STATUS_INFO = Object.freeze({
+  PENDING: { label: '대기' },
+  APPROVED: { label: '승인' },
+  REJECTED: { label: '거절' },
+  CANCELLED: { label: '취소' },
+});
+
 module.exports = {
   ROLE_INFO,
   ROLES,
@@ -30,4 +80,11 @@ module.exports = {
   MEMBER_STATUS_INFO,
   MEMBER_STATUS,
   SIGN_IN_BLOCKED_STATUSES,
+  CREW_MEMBER_ROLES,
+  CREW_STATUS_INFO,
+  MEMBERSHIP_TYPE_INFO,
+  JOIN_METHOD_INFO,
+  MEMBERSHIP_END_REASON_INFO,
+  CAPO_TERM_END_REASON_INFO,
+  REQUEST_STATUS_INFO,
 };

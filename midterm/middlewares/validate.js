@@ -1,10 +1,12 @@
 // 입력 검증 미들웨어 (AR-04). 검증을 통과한 값은 req.valid.{body,query,params}에 담긴다.
 //
 // 사용: validate({ body: { name: { type: 'string', required: true, max: 50 } }, bodyMinFields: 1 })
-// 규칙: type(string|integer|number|boolean|datetime|array), required, nullable, min, max,
-//       enum, format(email|phone), pattern + patternMessage, trim(기본 true), items(배열 원소 규칙)
+// 규칙: type(string|integer|number|boolean|datetime|array|object), required, nullable, min, max,
+//       enum, format(email|phone), pattern + patternMessage, trim(기본 true), default,
+//       items(배열 원소 규칙), fields(object의 하위 항목 규칙. 정의되지 않은 하위 항목은 거부)
 // - body는 JSON 타입을 그대로 검사하고, 정의되지 않은 항목이 오면 거부한다.
 // - query·params는 문자열이므로 정수·실수·불리언으로 변환하고, 정의되지 않은 항목은 무시한다.
+// - form은 웹 화면의 HTML 폼 본문(req.body)이다. query처럼 변환하고, 빈 칸은 입력하지 않은 것으로 본다.
 const { badRequest } = require('../utils/errors');
 
 const FORMATS = {
@@ -68,6 +70,11 @@ function checkValue(value, rule, field, coerce, errors) {
       if (rule.items) v = v.map((item, i) => checkValue(item, { required: true, ...rule.items }, `${field}[${i}]`, coerce, errors));
       break;
     }
+    case 'object': {
+      if (!isPlainObject(v)) return fail('객체여야 합니다.');
+      if (rule.fields) v = checkFields(v, rule.fields, field, coerce, errors, { strict: true });
+      break;
+    }
     default:
       throw new Error(`알 수 없는 검증 타입: ${rule.type}`);
   }
@@ -76,19 +83,25 @@ function checkValue(value, rule, field, coerce, errors) {
   return v;
 }
 
-function checkSource(source, input, rules, errors, { strict }) {
+function checkFields(input, rules, prefix, coerce, errors, { strict }) {
   const out = {};
   for (const [key, rule] of Object.entries(rules)) {
-    const v = checkValue(input[key], rule, `${source}.${key}`, source !== 'body', errors);
+    const v = checkValue(input[key], rule, `${prefix}.${key}`, coerce, errors);
     if (v !== undefined) out[key] = v;
   }
   if (strict) {
     for (const key of Object.keys(input)) {
-      if (!(key in rules)) errors.push({ field: `${source}.${key}`, message: '허용되지 않는 항목입니다.' });
+      if (!(key in rules)) errors.push({ field: `${prefix}.${key}`, message: '허용되지 않는 항목입니다.' });
     }
   }
   return out;
 }
+
+const checkSource = (source, input, rules, errors, { strict }) =>
+  checkFields(input, rules, source, source !== 'body', errors, { strict });
+
+// 경로의 정수 ID 규칙 (예: /crews/:crewId)
+const idParam = { type: 'integer', required: true, min: 1 };
 
 function validate(schema) {
   return (req, res, next) => {
@@ -106,6 +119,7 @@ function validate(schema) {
         }
       }
     }
+    if (schema.form) valid.body = checkSource('form', req.body ?? {}, schema.form, errors, { strict: false });
     if (schema.query) valid.query = checkSource('query', req.query ?? {}, schema.query, errors, { strict: false });
     if (schema.params) valid.params = checkSource('params', req.params ?? {}, schema.params, errors, { strict: false });
 
@@ -115,4 +129,4 @@ function validate(schema) {
   };
 }
 
-module.exports = { validate };
+module.exports = { validate, idParam };
