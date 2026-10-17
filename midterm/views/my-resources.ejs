@@ -1,0 +1,121 @@
+<%- include('partials/head') %>
+<h1>내 자원 <span class="tag">FR-14 · FR-15 · FR-17</span></h1>
+
+<section class="card">
+  <h2>지금 사용 중인 자원 <span class="tag">FR-15</span></h2>
+  <% if (usages.length) { %>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>자원</th><th>근거</th><th>사용</th><th>반환</th></tr></thead>
+        <tbody>
+          <% usages.forEach((u) => { %>
+            <tr>
+              <td><a href="/resources/<%= u.resource.id %>"><%= u.resource.name %></a> <span class="mono small"><%= u.resource.code %></span>
+                <span class="badge res-<%= u.resource.status %>"><%= u.resource.statusLabel %></span></td>
+              <td class="small"><%= u.task ? '업무: ' + u.task.title : '구성원 배정' %></td>
+              <td class="small"><%= fmt(u.startedAt) %> ~ 예정 <%= fmt(u.dueAt) %><% if (u.overdue) { %> <span class="badge bad">반환 지연</span><% } %></td>
+              <td>
+                <form method="post" action="/resources/<%= u.resource.id %>/return" class="form-row">
+                  <select name="condition"><% Object.entries(C.RETURN_CONDITION_INFO).forEach(([key, info]) => { %><option value="<%= key %>"><%= info.label %></option><% }) %></select>
+                  <input name="note" maxlength="500" placeholder="메모" size="10">
+                  <button class="small">반환</button>
+                </form>
+                <a class="small" href="/resources/<%= u.resource.id %>">인계·고장 신고</a>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } else { %><p class="muted">사용 중인 자원이 없습니다.</p><% } %>
+</section>
+
+<section class="card">
+  <h2>나에게 배정된 자원 <span class="tag">FR-14 · FR-17</span></h2>
+  <% if (allocations.length) { %>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>자원</th><th>배정 시간대</th><th>용도</th><th></th></tr></thead>
+        <tbody>
+          <% allocations.forEach((a) => { %>
+            <tr>
+              <td><a href="/resources/<%= a.resource.id %>"><%= a.resource.name %></a> <span class="mono small"><%= a.resource.code %></span>
+                <span class="badge res-<%= a.resource.status %>"><%= a.resource.statusLabel %></span></td>
+              <td class="small"><%= fmt(a.startAt) %> ~ <%= fmt(a.endAt) %></td>
+              <td class="small"><%= a.purpose || '-' %><%= a.requestId ? ' (사용 신청 승인)' : '' %><%= a.handedOverFrom ? ' (인계받음)' : '' %></td>
+              <td>
+                <% if (a.inUse) { %><span class="badge ok">사용 중</span>
+                <% } else { %><form method="post" action="/resources/<%= a.resource.id %>/checkout"><button class="small">사용 시작</button></form><% } %>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <p class="hint">사용은 배정 시간대 안에서만 시작할 수 있습니다. 반환하면 배정도 끝나 남은 시간대가 비워집니다.</p>
+  <% } else { %><p class="muted">배정된 자원이 없습니다. 업무에 할당된 자원은 업무 화면에서 사용을 시작합니다.</p><% } %>
+</section>
+
+<% if (can('resource.request')) { %>
+  <section class="card">
+    <h2>자원 사용 신청 <span class="tag">FR-14 · FR-17 · BR-07 · BR-08</span></h2>
+    <form method="post" action="/resource-requests">
+      <div class="form-row">
+        <label>관리 번호 <input name="code" required maxlength="30" placeholder="예: RD-002" size="10"></label>
+        <label>시작 <input name="startAt" type="datetime-local" required></label>
+        <label>종료 <input name="endAt" type="datetime-local" required></label>
+      </div>
+      <input name="reason" required maxlength="500" placeholder="사유" size="40"> <button>신청</button>
+      <p class="hint">관리 번호는 <a href="/resources">자원</a> 화면에서 확인하세요. 내 역할보다 높은 최소 역할의 자원은 신청할 수 없고, 점검중·사용불가(BR-08)이거나 그 시간대에 이미 예약된(BR-07) 자원은 거부됩니다.</p>
+    </form>
+
+    <h3>내 신청</h3>
+    <% if (requests.length) { %>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>자원</th><th>시간대</th><th>사유</th><th>상태</th><th></th></tr></thead>
+          <tbody>
+            <% requests.forEach((q) => { %>
+              <tr>
+                <td><a href="/resources/<%= q.resource.id %>"><%= q.resource.name %></a></td>
+                <td class="small"><%= fmt(q.startAt) %> ~ <%= fmt(q.endAt) %></td>
+                <td class="small"><%= q.reason %></td>
+                <td><span class="badge"><%= q.statusLabel %></span><% if (q.decisionReason) { %> <span class="small muted"><%= q.decisionReason %></span><% } %></td>
+                <td><% if (q.status === 'PENDING') { %><form method="post" action="/resource-requests/<%= q.id %>/cancel"><button class="ghost small">취소</button></form><% } %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %><p class="muted">신청한 내역이 없습니다.</p><% } %>
+  </section>
+<% } %>
+
+<% if (can('resource.request.review')) { %>
+  <section class="card">
+    <h2>처리할 사용 신청 <span class="tag">FR-17 · BR-05</span></h2>
+    <% if (review.length) { %>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>신청자</th><th>자원</th><th>시간대</th><th>사유</th><th>처리</th></tr></thead>
+          <tbody>
+            <% review.forEach((q) => { %>
+              <tr>
+                <td><%- include('partials/who', { u: q.requester }) %></td>
+                <td><a href="/resources/<%= q.resource.id %>"><%= q.resource.name %></a></td>
+                <td class="small"><%= fmt(q.startAt) %> ~ <%= fmt(q.endAt) %></td>
+                <td class="small"><%= q.reason %></td>
+                <td>
+                  <form method="post" action="/resource-requests/<%= q.id %>/approve"><button class="small">승인</button></form>
+                  <form method="post" action="/resource-requests/<%= q.id %>/reject"><input name="reason" required placeholder="거절 사유" size="10"><button class="ghost small">거절</button></form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+      <p class="hint">승인하면 그 시점에 BR-07·BR-08을 다시 검사하고 신청자에게 자원을 배정합니다. <%= me.role === 'CAPO' ? 'Capo는 자기 Crew 소속원의 신청만 봅니다.' : '' %></p>
+    <% } else { %><p class="muted">처리할 신청이 없습니다.</p><% } %>
+  </section>
+<% } %>
+<%- include('partials/foot') %>

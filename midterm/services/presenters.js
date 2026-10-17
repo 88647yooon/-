@@ -3,6 +3,9 @@
 const {
   ROLE_INFO, MEMBER_STATUS_INFO, CREW_STATUS_INFO, MEMBERSHIP_TYPE_INFO, JOIN_METHOD_INFO,
   MEMBERSHIP_END_REASON_INFO, CAPO_TERM_END_REASON_INFO, REQUEST_STATUS_INFO,
+  TASK_STATUS_INFO, TASK_PRIORITY_INFO, ASSIGNEE_ROLE_INFO, ASSIGNMENT_RESPONSE_INFO,
+  ASSIGNMENT_RELEASE_REASON_INFO, TASK_OUTCOME_INFO,
+  RESOURCE_STATUS_INFO, MAINTENANCE_SOURCE_INFO, MAINTENANCE_RESULT_INFO, RETURN_CONDITION_INFO, RESOURCE_RELEASE_REASON_INFO,
 } = require('../config/constants');
 
 const labelOf = (info, key) => (key ? info[key].label : null);
@@ -161,6 +164,340 @@ function presentRoleRequest(r, refs) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// 단계 3: 업무
+
+function presentTaskType(type) {
+  return { id: type.id, name: type.name, description: type.description, taskCount: type.taskCount, createdAt: type.createdAt };
+}
+
+const typeBrief = (type) => (type ? { id: type.id, name: type.name } : null);
+
+// 다른 객체 안에 들어가는 업무 요약
+function taskBrief(task, refs) {
+  if (!task) return null;
+  return {
+    id: task.id,
+    title: task.title,
+    status: task.status,
+    statusLabel: labelOf(TASK_STATUS_INFO, task.status),
+    priority: task.priority,
+    priorityLabel: labelOf(TASK_PRIORITY_INFO, task.priority),
+    startAt: task.startAt,
+    endAt: task.endAt,
+    crew: refs ? crewBrief(refs.crews.get(task.crewId)) : undefined,
+  };
+}
+
+// counts: { assigneeCount, acceptedCount, pendingCount }
+function presentTask(task, refs, counts = { assigneeCount: 0, acceptedCount: 0, pendingCount: 0 }) {
+  return {
+    id: task.id,
+    title: task.title,
+    description: task.description,
+    type: typeBrief(refs.types.get(task.typeId)),
+    crew: crewBrief(refs.crews.get(task.crewId)),
+    priority: task.priority,
+    priorityLabel: labelOf(TASK_PRIORITY_INFO, task.priority),
+    status: task.status,
+    statusLabel: labelOf(TASK_STATUS_INFO, task.status),
+    location: task.location,
+    startAt: task.startAt,
+    endAt: task.endAt,
+    requiredHeadcount: task.requiredHeadcount,
+    leaderRequired: task.leaderRequired,
+    ...counts,
+    startedAt: task.startedAt,
+    completedAt: task.completedAt,
+    cancelledAt: task.cancelledAt,
+    cancelReason: task.cancelReason,
+    result: task.status === 'COMPLETED'
+      ? { outcome: task.resultOutcome, outcomeLabel: labelOf(TASK_OUTCOME_INFO, task.resultOutcome), summary: task.resultSummary }
+      : null,
+    duplicatedFrom: task.duplicatedFrom,
+    createdBy: userBrief(refs.users.get(task.createdBy)),
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+  };
+}
+
+// 업무 배정. 진행 중 배정과 끝난 배정(이력) 모두 이 형태다.
+function presentAssignee(a, refs) {
+  return {
+    id: a.id,
+    active: a.releasedAt === null,
+    user: userBrief(refs.users.get(a.userId)),
+    role: a.role,
+    roleLabel: labelOf(ASSIGNEE_ROLE_INFO, a.role),
+    response: a.response,
+    responseLabel: labelOf(ASSIGNMENT_RESPONSE_INFO, a.response),
+    responseNote: a.responseNote,
+    respondedAt: a.respondedAt,
+    assignedBy: userBrief(refs.users.get(a.assignedBy)),
+    assignedAt: a.assignedAt,
+    releasedAt: a.releasedAt,
+    releaseReason: a.releaseReason,
+    releaseReasonLabel: labelOf(ASSIGNMENT_RELEASE_REASON_INFO, a.releaseReason),
+    releasedBy: userBrief(refs.users.get(a.releasedBy)),
+    replacedBy: userBrief(refs.users.get(a.replacedBy)),
+  };
+}
+
+const assigneeRefIds = (rows) => rows.flatMap((a) => [a.userId, a.assignedBy, a.releasedBy, a.replacedBy]);
+
+function presentNote(note, refs) {
+  return {
+    id: note.id,
+    content: note.content,
+    target: userBrief(refs.users.get(note.targetUserId)),
+    targetLabel: note.targetUserId ? null : '참여자 전체',
+    author: userBrief(refs.users.get(note.authorId)),
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt,
+  };
+}
+
+function presentChecklistItem(item, refs) {
+  return {
+    id: item.id,
+    content: item.content,
+    position: item.position,
+    done: item.doneAt !== null,
+    doneBy: userBrief(refs.users.get(item.doneBy)),
+    doneAt: item.doneAt,
+    createdAt: item.createdAt,
+  };
+}
+
+function presentSwap(s, refs) {
+  return {
+    id: s.id,
+    task: taskBrief(refs.tasks.get(s.taskId), refs),
+    from: userBrief(refs.users.get(s.fromUserId)),
+    to: userBrief(refs.users.get(s.toUserId)),
+    reason: s.reason,
+    status: s.status,
+    statusLabel: labelOf(REQUEST_STATUS_INFO, s.status),
+    decidedBy: userBrief(refs.users.get(s.decidedBy)),
+    decidedAt: s.decidedAt,
+    decisionReason: s.decisionReason,
+    createdAt: s.createdAt,
+  };
+}
+
+function presentParticipation(p, refs) {
+  return {
+    user: userBrief(refs.users.get(p.userId)),
+    participated: p.participated,
+    contribution: p.contribution,
+    recordedBy: userBrief(refs.users.get(p.recordedBy)),
+    recordedAt: p.recordedAt,
+  };
+}
+
+function presentProgress(doc) {
+  return {
+    id: String(doc._id),
+    reporter: { id: doc.reporter.userId, username: doc.reporter.username, name: doc.reporter.name },
+    percent: doc.percent,
+    note: doc.note ?? null,
+    createdAt: doc.createdAt,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 단계 4: 공용 자원
+// refs에는 resources·categories 맵이 있어야 한다 (loadRefs의 resourceIds·categoryIds).
+
+function presentCategory(c) {
+  return {
+    id: c.id, name: c.name, description: c.description, resourceCount: c.resourceCount, availableCount: c.availableCount, createdAt: c.createdAt,
+  };
+}
+
+const categoryBrief = (c) => (c ? { id: c.id, name: c.name } : null);
+
+function resourceBrief(r, refs) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    code: r.code,
+    name: r.name,
+    category: categoryBrief(refs.categories.get(r.categoryId)),
+    status: r.status,
+    statusLabel: labelOf(RESOURCE_STATUS_INFO, r.status),
+    location: r.location,
+  };
+}
+
+const isOverdue = (due, now = new Date()) => Boolean(due) && due < now;
+
+// usage: 반환되지 않은 사용 기록, maintenance: 진행 중인 점검 (없으면 null)
+function presentResource(r, refs, { usage = null, maintenance = null } = {}) {
+  return {
+    id: r.id,
+    code: r.code,
+    name: r.name,
+    category: categoryBrief(refs.categories.get(r.categoryId)),
+    location: r.location,
+    description: r.description,
+    status: r.status,
+    statusLabel: labelOf(RESOURCE_STATUS_INFO, r.status),
+    assignable: RESOURCE_STATUS_INFO[r.status].assignable,
+    minRole: r.minRole,
+    minRoleLabel: labelOf(ROLE_INFO, r.minRole),
+    statusChangedAt: r.statusChangedAt,
+    currentUsage: usage
+      ? {
+        usageId: usage.id,
+        user: userBrief(refs.users.get(usage.userId)),
+        task: taskBrief(refs.tasks.get(usage.taskId), refs),
+        startedAt: usage.startedAt,
+        dueAt: usage.dueAt,
+        overdue: isOverdue(usage.dueAt),
+        damageReported: usage.damageReportedAt !== null,
+      }
+      : null,
+    openMaintenance: maintenance
+      ? { id: maintenance.id, reason: maintenance.reason, expectedEndAt: maintenance.expectedEndAt, overdue: isOverdue(maintenance.expectedEndAt) }
+      : null,
+    createdBy: userBrief(refs.users.get(r.createdBy)),
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  };
+}
+
+const releaseFields = (a, refs) => ({
+  releasedAt: a.releasedAt,
+  releaseReason: a.releaseReason,
+  releaseReasonLabel: labelOf(RESOURCE_RELEASE_REASON_INFO, a.releaseReason),
+  releasedBy: userBrief(refs.users.get(a.releasedBy)),
+});
+
+// 업무 자원 할당. usage: 이 할당으로 시작한 반환되지 않은 사용 기록
+function presentTaskResource(a, refs, usage = null) {
+  return {
+    id: a.id,
+    active: a.releasedAt === null,
+    task: taskBrief(refs.tasks.get(a.taskId), refs),
+    resource: resourceBrief(refs.resources.get(a.resourceId), refs),
+    startAt: a.startAt,
+    endAt: a.endAt,
+    note: a.note,
+    inUse: Boolean(usage),
+    usedBy: usage ? userBrief(refs.users.get(usage.userId)) : null,
+    allocatedBy: userBrief(refs.users.get(a.allocatedBy)),
+    allocatedAt: a.allocatedAt,
+    ...releaseFields(a, refs),
+  };
+}
+
+// 구성원 자원 배정. usage: 이 배정으로 시작한 반환되지 않은 사용 기록
+function presentAllocation(a, refs, usage = null) {
+  return {
+    id: a.id,
+    active: a.releasedAt === null,
+    resource: resourceBrief(refs.resources.get(a.resourceId), refs),
+    user: userBrief(refs.users.get(a.userId)),
+    startAt: a.startAt,
+    endAt: a.endAt,
+    purpose: a.purpose,
+    requestId: a.requestId,
+    handedOverFrom: a.handedOverFrom,
+    inUse: Boolean(usage),
+    allocatedBy: userBrief(refs.users.get(a.allocatedBy)),
+    allocatedAt: a.allocatedAt,
+    ...releaseFields(a, refs),
+  };
+}
+
+function presentResourceRequest(q, refs, allocationId = null) {
+  return {
+    id: q.id,
+    resource: resourceBrief(refs.resources.get(q.resourceId), refs),
+    requester: userBrief(refs.users.get(q.userId)),
+    startAt: q.startAt,
+    endAt: q.endAt,
+    reason: q.reason,
+    status: q.status,
+    statusLabel: labelOf(REQUEST_STATUS_INFO, q.status),
+    decidedBy: userBrief(refs.users.get(q.decidedBy)),
+    decidedAt: q.decidedAt,
+    decisionReason: q.decisionReason,
+    allocationId,
+    createdAt: q.createdAt,
+  };
+}
+
+function presentUsage(u, refs) {
+  return {
+    id: u.id,
+    open: u.returnedAt === null,
+    resource: resourceBrief(refs.resources.get(u.resourceId), refs),
+    user: userBrief(refs.users.get(u.userId)),
+    basis: u.taskResourceId ? 'TASK' : 'MEMBER',
+    task: taskBrief(refs.tasks.get(u.taskId), refs),
+    taskResourceId: u.taskResourceId,
+    allocationId: u.allocationId,
+    startedAt: u.startedAt,
+    dueAt: u.dueAt,
+    overdue: u.returnedAt === null && isOverdue(u.dueAt),
+    returnedAt: u.returnedAt,
+    returnCondition: u.returnCondition,
+    returnConditionLabel: labelOf(RETURN_CONDITION_INFO, u.returnCondition),
+    returnNote: u.returnNote,
+    returnedBy: userBrief(refs.users.get(u.returnedBy)),
+    handedOverTo: userBrief(refs.users.get(u.handedOverTo)),
+    handoverFromId: u.handoverFromId,
+    damageReportedAt: u.damageReportedAt,
+    damageNote: u.damageNote,
+  };
+}
+
+const usageRefIds = (rows) => ({
+  userIds: rows.flatMap((u) => [u.userId, u.returnedBy, u.handedOverTo]),
+  taskIds: rows.map((u) => u.taskId),
+  resourceIds: rows.map((u) => u.resourceId),
+});
+
+function presentMaintenance(m, refs) {
+  return {
+    id: m.id,
+    open: m.completedAt === null,
+    resource: resourceBrief(refs.resources.get(m.resourceId), refs),
+    source: m.source,
+    sourceLabel: labelOf(MAINTENANCE_SOURCE_INFO, m.source),
+    reason: m.reason,
+    expectedEndAt: m.expectedEndAt,
+    overdue: m.completedAt === null && isOverdue(m.expectedEndAt),
+    usageId: m.usageId,
+    startedAt: m.startedAt,
+    startedBy: userBrief(refs.users.get(m.startedBy)),
+    completedAt: m.completedAt,
+    completedBy: userBrief(refs.users.get(m.completedBy)),
+    result: m.result,
+    resultLabel: labelOf(MAINTENANCE_RESULT_INFO, m.result),
+    resultNote: m.resultNote,
+  };
+}
+
+const SCHEDULE_KIND_LABEL = { TASK: '업무 할당', MEMBER: '구성원 배정', USAGE: '사용' };
+
+// 자원 시간표 항목 (예약·사용). 시간 충돌(BR-07) 목록도 이 형태다.
+// 반환 예정 시각이 지난 미반환 사용은 overdue=true이고, 반환될 때까지 그 뒤 시간대와도 겹치는 것으로 본다.
+function presentScheduleEntry(e, refs) {
+  return {
+    kind: e.kind,
+    kindLabel: SCHEDULE_KIND_LABEL[e.kind],
+    id: e.id,
+    startAt: e.startAt,
+    endAt: e.endAt,
+    overdue: e.overdue,
+    task: taskBrief(refs.tasks.get(e.taskId), refs),
+    user: userBrief(refs.users.get(e.userId)),
+  };
+}
+
 function presentSession(session, currentSessionId) {
   return {
     id: session.id,
@@ -185,5 +522,27 @@ module.exports = {
   presentCapoTerm,
   presentJoinRequest,
   presentRoleRequest,
+  presentTaskType,
+  typeBrief,
+  taskBrief,
+  presentTask,
+  presentAssignee,
+  assigneeRefIds,
+  presentNote,
+  presentChecklistItem,
+  presentSwap,
+  presentParticipation,
+  presentProgress,
+  presentCategory,
+  categoryBrief,
+  resourceBrief,
+  presentResource,
+  presentTaskResource,
+  presentAllocation,
+  presentResourceRequest,
+  presentUsage,
+  usageRefIds,
+  presentMaintenance,
+  presentScheduleEntry,
   presentSession,
 };

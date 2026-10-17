@@ -1,0 +1,425 @@
+<%- include('partials/head') %>
+<% const open = ['PLANNED', 'IN_PROGRESS', 'ON_HOLD'].includes(task.status); %>
+<h1><%= task.title %>
+  <span class="badge task-<%= task.status %>"><%= task.statusLabel %></span>
+  <span class="badge prio-<%= task.priority %>"><%= task.priorityLabel %></span>
+</h1>
+<p class="muted">
+  <%= task.crew ? task.crew.name : '조직 업무' %><%= task.type ? ' · ' + task.type.name : '' %>
+  · <%= fmt(task.startAt) %> ~ <%= fmt(task.endAt) %><%= task.location ? ' · ' + task.location : '' %>
+  · 내 관계: <%= manager ? '관리자' : '참여자' %>
+</p>
+
+<div class="cols">
+  <section class="card">
+    <h2>업무 정보 <span class="tag">FR-07</span></h2>
+    <dl class="facts">
+      <dt>설명</dt><dd><%= task.description || '-' %></dd>
+      <dt>필요 인원</dt><dd><%= task.requiredHeadcount ? task.requiredHeadcount + '명' : '지정 안 됨 (1명)' %><%= task.leaderRequired ? ' · 리더 필요' : '' %></dd>
+      <dt>참여자</dt><dd>수락 <%= task.acceptedCount %>명 · 응답 대기 <%= task.pendingCount %>명 · 전체 <%= task.assigneeCount %>명</dd>
+      <dt>등록</dt><dd><%- include('partials/who', { u: task.createdBy }) %> · <%= fmt(task.createdAt) %></dd>
+      <% if (task.startedAt) { %><dt>실제 시작</dt><dd><%= fmt(task.startedAt) %></dd><% } %>
+      <% if (task.completedAt) { %><dt>완료</dt><dd><%= fmt(task.completedAt) %></dd><% } %>
+      <% if (task.cancelledAt) { %><dt>취소</dt><dd><%= fmt(task.cancelledAt) %> · <%= task.cancelReason %></dd><% } %>
+      <% if (task.duplicatedFrom) { %><dt>원본</dt><dd><a href="/tasks/<%= task.duplicatedFrom %>">업무 #<%= task.duplicatedFrom %></a></dd><% } %>
+    </dl>
+    <% if (manager && open) { %>
+      <div class="form-row">
+        <% if (task.status === 'PLANNED' || task.status === 'ON_HOLD') { %>
+          <form method="post" action="/tasks/<%= task.id %>/status"><input type="hidden" name="status" value="IN_PROGRESS"><button><%= task.status === 'PLANNED' ? '업무 시작' : '다시 진행' %></button></form>
+        <% } %>
+        <% if (task.status === 'IN_PROGRESS') { %>
+          <form method="post" action="/tasks/<%= task.id %>/status"><input type="hidden" name="status" value="ON_HOLD"><button class="ghost">보류</button></form>
+        <% } %>
+      </div>
+      <p class="hint">시작하려면 배정된 구성원이 한 명 이상 있고 선행 업무가 모두 끝나 있어야 합니다. 완료는 아래 완료 처리, 취소는 업무 관리에서 합니다.</p>
+    <% } %>
+  </section>
+
+  <% if (readiness) { %>
+    <section class="card">
+      <h2>시작 준비 상태 <span class="tag">FR-07</span></h2>
+      <p><span class="badge <%= readiness.ready ? 'ok' : 'bad' %>"><%= readiness.ready ? '시작할 수 있음' : '준비 안 됨' %></span></p>
+      <% if (readiness.issues.length) { %><ul><% readiness.issues.forEach((i) => { %><li><%= i %></li><% }) %></ul><% } %>
+      <p class="hint">필요 <%= readiness.personnel.requiredHeadcount %>명 · 배정 <%= readiness.personnel.assignedCount %>명 · 수락 <%= readiness.personnel.acceptedCount %>명 · 리더 <%= readiness.personnel.hasLeader ? '있음' : '없음' %>
+        · 할당 자원 <%= readiness.resources.allocatedCount %>개</p>
+    </section>
+  <% } %>
+</div>
+
+<section class="card">
+  <h2>참여자 <span class="tag">FR-08 · FR-09 · BR-02 · BR-03</span></h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>구성원</th><th>역할</th><th>응답</th><th>배정</th><th>관리</th></tr></thead>
+      <tbody>
+        <% assignees.forEach((a) => { %>
+          <tr>
+            <td><%- include('partials/who', { u: a.user }) %></td>
+            <td><%= a.roleLabel %></td>
+            <td><span class="badge"><%= a.responseLabel %></span><%= a.responseNote ? ' ' + a.responseNote : '' %></td>
+            <td class="small"><%= fmt(a.assignedAt) %></td>
+            <td>
+              <% if (open && a.user.id === me.id) { %>
+                <% if (a.response !== 'ACCEPTED') { %><form method="post" action="/tasks/<%= task.id %>/respond"><input type="hidden" name="response" value="ACCEPTED"><button class="small">수락</button></form><% } %>
+                <form method="post" action="/tasks/<%= task.id %>/respond"><input type="hidden" name="response" value="DECLINED"><button class="ghost small">거절</button></form>
+              <% } %>
+              <% if (open && manager) { %>
+                <form method="post" action="/tasks/<%= task.id %>/assignees/<%= a.user.id %>/role">
+                  <input type="hidden" name="role" value="<%= a.role === 'LEADER' ? 'MEMBER' : 'LEADER' %>">
+                  <button class="ghost small"><%= a.role === 'LEADER' ? '일반으로' : '리더로' %></button>
+                </form>
+                <form method="post" action="/tasks/<%= task.id %>/assignees/<%= a.user.id %>/remove"><button class="ghost small">해제</button></form>
+                <form method="post" action="/tasks/<%= task.id %>/assignees/<%= a.user.id %>/replace">
+                  <input name="username" required placeholder="교체할 아이디" size="10"><button class="ghost small">교체</button>
+                </form>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+        <% if (!assignees.length) { %><tr><td colspan="5" class="muted">배정된 구성원이 없습니다.</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+  <% if (open && manager) { %>
+    <form method="post" action="/tasks/<%= task.id %>/assignees" class="form-row">
+      <label>아이디 (쉼표로 여러 명) <input name="usernames" required placeholder="예: soldier1, associate1" size="30"></label>
+      <label>역할
+        <select name="role"><option value="MEMBER">일반</option><option value="LEADER">리더 (첫 번째 사람)</option></select>
+      </label>
+      <button>배정</button>
+    </form>
+    <p class="hint">
+      정지·탈퇴 구성원은 BR-02로, 같은 시간대에 끝나지 않은 다른 업무에 배정된 구성원은 BR-03으로 거부됩니다.
+      <%= me.role === 'CAPO' ? 'Capo는 자신이 책임자인 Crew의 소속원만 배정할 수 있습니다(BR-05).' : '' %> 여러 명 중 한 명이라도 안 되면 아무도 배정하지 않습니다.
+    </p>
+  <% } %>
+  <% if (open && mine) { %>
+    <form method="post" action="/tasks/<%= task.id %>/swap" class="form-row">
+      <label>내 배정을 넘겨받을 아이디 <input name="username" required size="12"></label>
+      <label>사유 <input name="reason" maxlength="500"></label>
+      <button class="ghost">교대 요청</button>
+    </form>
+  <% } %>
+  <% if (swaps.length) { %>
+    <h3>이 업무의 교대 요청</h3>
+    <ul class="small">
+      <% swaps.forEach((s) => { %>
+        <li><%= s.from.name %> → <%= s.to.name %> <span class="badge"><%= s.statusLabel %></span><%= s.reason ? ' · ' + s.reason : '' %>
+          <% if (s.status === 'PENDING') { %><a href="/my-tasks">내 업무에서 처리</a><% } %></li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2>자원 <span class="tag">FR-17 · BR-07 · BR-08</span></h2>
+  <% if (requirements.resources.length) { %>
+    <p class="small">필요 자원:
+      <% requirements.resources.forEach((r, i) => { %><%= i ? ', ' : '' %><%= r.category.name %> <%= r.allocatedCount %>/<%= r.quantity %><%= r.satisfied ? ' ✓' : '' %><% }) %>
+    </p>
+  <% } %>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>자원</th><th>상태</th><th>할당 시간대</th><th>사용</th><th>관리</th></tr></thead>
+      <tbody>
+        <% resources.forEach((a) => { %>
+          <tr>
+            <td><a href="/resources/<%= a.resource.id %>"><%= a.resource.name %></a> <span class="mono small"><%= a.resource.code %></span> <span class="muted small"><%= a.resource.category.name %></span></td>
+            <td><span class="badge res-<%= a.resource.status %>"><%= a.resource.statusLabel %></span></td>
+            <td class="small"><%= fmt(a.startAt) %> ~ <%= fmt(a.endAt) %></td>
+            <td class="small">
+              <% if (a.inUse) { %><span class="badge ok">사용 중</span> <%= a.usedBy ? a.usedBy.name : '' %>
+                <% if (a.usedBy && a.usedBy.id === me.id) { %>
+                  <form method="post" action="/resources/<%= a.resource.id %>/return"><input type="hidden" name="condition" value="GOOD"><button class="small">반환</button></form>
+                <% } %>
+              <% } else if (open && mine) { %>
+                <form method="post" action="/resources/<%= a.resource.id %>/checkout"><input type="hidden" name="taskId" value="<%= task.id %>"><button class="small">사용 시작</button></form>
+              <% } else { %>-<% } %>
+            </td>
+            <td>
+              <% if (open && manager && !a.inUse) { %>
+                <form method="post" action="/tasks/<%= task.id %>/resources/<%= a.resource.id %>/edit">
+                  <input name="startAt" type="datetime-local" value="<%= toLocalInput(a.startAt) %>">
+                  <input name="endAt" type="datetime-local" value="<%= toLocalInput(a.endAt) %>">
+                  <button class="ghost small">시간 조정</button>
+                </form>
+                <form method="post" action="/tasks/<%= task.id %>/resources/<%= a.resource.id %>/remove"><button class="ghost small">해제</button></form>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+        <% if (!resources.length) { %><tr><td colspan="5" class="muted">할당된 자원이 없습니다.</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+  <% if (open && mine) { %><p class="hint">참여자는 할당 시간대 안에서 업무 자원 사용을 시작할 수 있습니다. 다 쓰면 반환하세요.</p><% } %>
+  <% if (manager && resources.some((a) => a.inUse)) { %>
+    <form method="post" action="/tasks/<%= task.id %>/resources/return" class="form-row">
+      <input name="note" maxlength="500" placeholder="메모"><button class="ghost small">사용 중인 업무 자원 모두 반환</button>
+    </form>
+  <% } %>
+  <% if (open && manager) { %>
+    <form method="post" action="/tasks/<%= task.id %>/resources" class="form-row">
+      <label>관리 번호 <input name="code" required maxlength="30" size="10" placeholder="예: VH-002"></label>
+      <label>시작 (비우면 업무 시작) <input name="startAt" type="datetime-local"></label>
+      <label>종료 (비우면 업무 종료) <input name="endAt" type="datetime-local"></label>
+      <button>자원 할당</button>
+    </form>
+    <p class="hint">점검중·사용불가 자원은 BR-08로, 같은 시간대에 다른 업무 할당·구성원 배정·사용 중인 기록이 있는 자원은 BR-07로 거부됩니다. 할당 시간대는 업무 일정 안이어야 합니다.</p>
+    <% if (candidates.length) { %>
+      <p class="small">할당할 수 있는 자원<%= requirements.resources.length ? ' (필요 자원 분류)' : '' %>:
+        <% candidates.forEach((r, i) => { %><%= i ? ', ' : '' %><span class="mono"><%= r.code %></span> <%= r.name %><% }) %>
+      </p>
+    <% } else { %><p class="small muted">지금 업무 시간대에 할당할 수 있는 자원이 없습니다.</p><% } %>
+  <% } %>
+</section>
+
+<div class="cols">
+  <section class="card">
+    <h2>지시사항 <span class="tag">FR-09</span></h2>
+    <% if (notes.length) { %>
+      <ul>
+        <% notes.forEach((n) => { %>
+          <li>
+            <span class="badge"><%= n.target ? n.target.name + '에게' : '참여자 전체' %></span> <%= n.content %>
+            <span class="muted small">— <%= n.author ? n.author.name : '' %>, <%= fmt(n.createdAt) %></span>
+            <% if (manager) { %><form method="post" action="/tasks/<%= task.id %>/notes/<%= n.id %>/delete"><button class="ghost small">삭제</button></form><% } %>
+          </li>
+        <% }) %>
+      </ul>
+    <% } else { %><p class="muted">지시사항이 없습니다.</p><% } %>
+    <% if (!manager) { %><p class="hint">참여자는 참여자 전체 대상이거나 자신에게 온 지시사항만 봅니다.</p><% } %>
+    <% if (manager && task.status !== 'CANCELLED') { %>
+      <form method="post" action="/tasks/<%= task.id %>/notes" class="form-row">
+        <label>내용 <input name="content" required maxlength="2000" size="28"></label>
+        <label>받는 사람 아이디 (비우면 전체) <input name="target" size="12"></label>
+        <button>남기기</button>
+      </form>
+    <% } %>
+  </section>
+
+  <section class="card">
+    <h2>체크리스트 <span class="tag">FR-07 · FR-10</span></h2>
+    <p class="section-note muted">완료 <%= checklist.doneCount %> / <%= checklist.total %></p>
+    <ul>
+      <% checklist.items.forEach((i) => { %>
+        <li>
+          <%= i.done ? '☑' : '☐' %> <%= i.content %>
+          <% if (i.done) { %><span class="muted small">— <%= i.doneBy ? i.doneBy.name : '' %>, <%= fmt(i.doneAt) %></span><% } %>
+          <% if (open) { %>
+            <form method="post" action="/tasks/<%= task.id %>/checklist/<%= i.id %>/check"><input type="hidden" name="done" value="<%= i.done ? 'false' : 'true' %>"><button class="ghost small"><%= i.done ? '표시 지우기' : '완료 표시' %></button></form>
+            <% if (manager) { %><form method="post" action="/tasks/<%= task.id %>/checklist/<%= i.id %>/delete"><button class="ghost small">삭제</button></form><% } %>
+          <% } %>
+        </li>
+      <% }) %>
+    </ul>
+    <% if (open && manager) { %>
+      <form method="post" action="/tasks/<%= task.id %>/checklist" class="form-row">
+        <input name="content" required maxlength="300" placeholder="새 항목"><button class="small">추가</button>
+      </form>
+    <% } %>
+  </section>
+</div>
+
+<div class="cols">
+  <section class="card">
+    <h2>선행 업무 <span class="tag">FR-07</span></h2>
+    <% if (dependencies.predecessors.length) { %>
+      <ul>
+        <% dependencies.predecessors.forEach((d) => { %>
+          <li><a href="/tasks/<%= d.id %>"><%= d.title %></a> <span class="badge task-<%= d.status %>"><%= d.statusLabel %></span>
+            <% if (open && manager) { %><form method="post" action="/tasks/<%= task.id %>/dependencies/<%= d.id %>/delete"><button class="ghost small">해제</button></form><% } %></li>
+        <% }) %>
+      </ul>
+    <% } else { %><p class="muted">선행 업무가 없습니다.</p><% } %>
+    <% if (dependencies.successors.length) { %>
+      <p class="small">이 업무를 기다리는 업무: <% dependencies.successors.forEach((d, i) => { %><%= i ? ', ' : '' %><a href="/tasks/<%= d.id %>"><%= d.title %></a><% }) %></p>
+    <% } %>
+    <% if (open && manager) { %>
+      <form method="post" action="/tasks/<%= task.id %>/dependencies" class="form-row">
+        <label>선행 업무 번호 <input name="dependsOnId" type="number" min="1" required size="6"></label><button class="small">지정</button>
+      </form>
+      <p class="hint">업무 번호는 업무 화면 주소(/tasks/번호)에 있습니다. 순환 관계는 거부됩니다.</p>
+    <% } %>
+  </section>
+
+  <section class="card">
+    <h2>진행 보고 <span class="tag">FR-10</span></h2>
+    <% if (progress.length) { %>
+      <ul>
+        <% progress.forEach((p) => { %><li><strong><%= p.percent %>%</strong> <%= p.note || '' %> <span class="muted small">— <%= p.reporter.name %>, <%= fmt(p.createdAt) %></span></li><% }) %>
+      </ul>
+    <% } else { %><p class="muted">진행 보고가 없습니다.</p><% } %>
+    <% if (mine && task.status === 'IN_PROGRESS') { %>
+      <form method="post" action="/tasks/<%= task.id %>/progress" class="form-row">
+        <label>진척률(%) <input name="percent" type="number" min="0" max="100" required size="4"></label>
+        <label>메모 <input name="note" maxlength="1000"></label>
+        <button class="small">보고</button>
+      </form>
+    <% } %>
+  </section>
+</div>
+
+<section class="card">
+  <h2>완료와 결과 <span class="tag">FR-10 · FR-11 · BR-06</span></h2>
+  <% if (result) { %>
+    <dl class="facts">
+      <dt>성과</dt><dd><span class="badge"><%= result.outcomeLabel %></span></dd>
+      <dt>결과 요약</dt><dd><%= result.summary %></dd>
+      <dt>기록</dt><dd><%= result.recordedBy ? result.recordedBy.name : '-' %> · <%= fmt(result.completedAt) %></dd>
+    </dl>
+    <% if (result.corrections.length) { %>
+      <h3>정정 이력</h3>
+      <ul class="small">
+        <% result.corrections.forEach((c) => { %><li><%= fmt(c.at) %> · <%= c.actor ? c.actor.username : '' %> · <%= c.reason || '' %> <span class="muted mono"><%= JSON.stringify(c.before) %> → <%= JSON.stringify(c.after) %></span></li><% }) %>
+      </ul>
+    <% } %>
+    <form method="post" action="/tasks/<%= task.id %>/result" class="form-row">
+      <label>성과
+        <select name="outcome"><option value="">그대로</option><% Object.entries(C.TASK_OUTCOME_INFO).forEach(([key, info]) => { %><option value="<%= key %>"><%= info.label %></option><% }) %></select>
+      </label>
+      <label>결과 요약 <input name="summary" maxlength="2000" placeholder="그대로 두려면 비우세요" size="28"></label>
+      <label>정정 사유 <input name="reason" required maxlength="500"></label>
+      <button class="ghost">결과 정정</button>
+    </form>
+    <p class="hint">완료된 업무의 핵심 결과는 일반 구성원이 바꿀 수 없습니다(BR-06). 정정은 Underboss·Boss만 사유를 남기고 할 수 있습니다. <%= isOrgManager ? '' : '지금 계정으로 정정하면 BR-06으로 거부됩니다.' %></p>
+  <% } else if (manager && task.status === 'IN_PROGRESS') { %>
+    <form method="post" action="/tasks/<%= task.id %>/complete" class="form-row">
+      <label>성과
+        <select name="outcome"><% Object.entries(C.TASK_OUTCOME_INFO).forEach(([key, info]) => { %><option value="<%= key %>"><%= info.label %></option><% }) %></select>
+      </label>
+      <label>결과 요약 <input name="summary" required maxlength="2000" size="40"></label>
+      <button>완료 처리</button>
+    </form>
+    <p class="hint">완료하면 결과와 참여 기록이 잠깁니다. 참여 기록을 따로 남기지 않은 참여자는 배정을 수락했으면 참여, 아니면 불참으로 기록됩니다.</p>
+  <% } else { %>
+    <p class="muted"><%= task.status === 'CANCELLED' ? '취소된 업무입니다.' : '진행 중인 업무만 완료할 수 있습니다.' %></p>
+  <% } %>
+
+  <h3>참여 기록 <span class="tag">FR-11</span></h3>
+  <% if (participations.length) { %>
+    <table>
+      <thead><tr><th>구성원</th><th>참여</th><th>기여 내용</th><th>기록</th></tr></thead>
+      <tbody>
+        <% participations.forEach((p) => { %>
+          <tr><td><%- include('partials/who', { u: p.user }) %></td><td><%= p.participated ? '참여' : '불참' %></td><td class="small"><%= p.contribution || '-' %></td><td class="small"><%= p.recordedBy ? p.recordedBy.name : '' %> · <%= fmt(p.recordedAt) %></td></tr>
+        <% }) %>
+      </tbody>
+    </table>
+  <% } else { %><p class="muted">참여 기록이 없습니다.</p><% } %>
+  <% if (manager && (task.status === 'IN_PROGRESS' || task.status === 'ON_HOLD' || task.status === 'COMPLETED')) { %>
+    <% const people = [...assignees.map((a) => a.user), ...participations.map((p) => p.user)].filter((u, i, all) => all.findIndex((x) => x.id === u.id) === i); %>
+    <h3><%= task.status === 'COMPLETED' ? '참여 기록 정정' : '참여 기록 남기기' %></h3>
+    <% people.forEach((u) => { %>
+      <form method="post" action="/tasks/<%= task.id %>/participations/<%= u.id %>" class="form-row">
+        <span><%= u.name %> <span class="muted small">@<%= u.username %></span></span>
+        <select name="participated"><option value="true">참여</option><option value="false">불참</option></select>
+        <input name="contribution" maxlength="1000" placeholder="기여 내용">
+        <% if (task.status === 'COMPLETED') { %><input name="reason" maxlength="500" placeholder="정정 사유" required><% } %>
+        <button class="ghost small">기록</button>
+      </form>
+    <% }) %>
+    <% if (task.status === 'COMPLETED') { %><p class="hint">완료된 업무의 참여 기록은 Underboss·Boss만 사유를 남기고 정정할 수 있습니다(그 밖에는 BR-06).</p><% } %>
+  <% } %>
+</section>
+
+<% if (manager && open) { %>
+  <section class="card">
+    <h2>업무 관리 <span class="tag">FR-07 · FR-10</span></h2>
+    <div class="forms">
+      <form method="post" action="/tasks/<%= task.id %>/edit">
+        <h3>정보 수정</h3>
+        <div class="form-row">
+          <label>제목 <input name="title" maxlength="100" placeholder="<%= task.title %>"></label>
+          <label>중요도
+            <select name="priority"><option value="">그대로</option><% Object.entries(C.TASK_PRIORITY_INFO).forEach(([key, info]) => { %><option value="<%= key %>"><%= info.label %></option><% }) %></select>
+          </label>
+          <label>유형
+            <select name="typeId"><option value="">그대로</option><% types.forEach((t) => { %><option value="<%= t.id %>"><%= t.name %></option><% }) %></select>
+          </label>
+          <label>장소 <input name="location" maxlength="100" placeholder="<%= task.location || '' %>"></label>
+        </div>
+        <button>수정</button>
+      </form>
+      <form method="post" action="/tasks/<%= task.id %>/schedule">
+        <h3>일정 변경</h3>
+        <div class="form-row">
+          <label>시작 <input name="startAt" type="datetime-local" required value="<%= toLocalInput(task.startAt) %>"></label>
+          <label>종료 <input name="endAt" type="datetime-local" required value="<%= toLocalInput(task.endAt) %>"></label>
+          <label>사유 <input name="reason" maxlength="500"></label>
+        </div>
+        <button>일정 변경</button>
+        <p class="hint">모든 참여자의 시간 겹침(BR-03)과, 새 일정으로 옮긴 할당 자원의 시간 겹침(BR-07)을 다시 검사합니다. 하나라도 겹치면 거부됩니다.</p>
+      </form>
+      <form method="post" action="/tasks/<%= task.id %>/requirements">
+        <h3>필요 인원·자원</h3>
+        <div class="form-row">
+          <label>필요 인원 <input name="requiredHeadcount" type="number" min="1" max="100" required value="<%= task.requiredHeadcount || 1 %>"></label>
+          <label>리더 <select name="leaderRequired"><option value="false">필요 없음</option><option value="true" <%= task.leaderRequired ? 'selected' : '' %>>필요</option></select></label>
+        </div>
+        <div class="form-row">
+          <% categories.forEach((c) => { %>
+            <% const current = requirements.resources.find((r) => r.category.id === c.id); %>
+            <label><%= c.name %> <input name="qty_<%= c.id %>" type="number" min="0" max="20" size="3" value="<%= current ? current.quantity : '' %>"></label>
+          <% }) %>
+        </div>
+        <button>설정</button>
+        <p class="hint">필요 자원은 분류별 수량입니다(비우면 필요 없음). 시작 준비 상태와 할당 후보에 쓰입니다.</p>
+      </form>
+      <form method="post" action="/tasks/<%= task.id %>/duplicate">
+        <h3>업무 복제</h3>
+        <div class="form-row">
+          <label>새 시작 <input name="startAt" type="datetime-local" required></label>
+          <label>새 종료 <input name="endAt" type="datetime-local" required></label>
+        </div>
+        <button class="ghost">복제</button>
+      </form>
+      <form method="post" action="/tasks/<%= task.id %>/cancel">
+        <h3>업무 취소</h3>
+        <div class="form-row"><label>사유 <input name="reason" required maxlength="500"></label></div>
+        <button class="danger">취소</button>
+        <p class="hint">참여자 배정과 할당 자원이 모두 해제되고 대기 중인 교대 요청이 취소됩니다.</p>
+      </form>
+      <% if (task.status === 'PLANNED') { %>
+        <form method="post" action="/tasks/<%= task.id %>/delete">
+          <h3>삭제</h3>
+          <button class="danger">업무 삭제</button>
+          <p class="hint">계획 상태의 업무만 삭제할 수 있습니다.</p>
+        </form>
+      <% } %>
+    </div>
+  </section>
+<% } %>
+
+<div class="cols">
+  <section class="card">
+    <h2>상태 변경 이력 <span class="tag">FR-10</span></h2>
+    <table>
+      <thead><tr><th>시각</th><th>변경</th><th>처리자</th><th>사유</th></tr></thead>
+      <tbody>
+        <% history.forEach((h) => { %>
+          <tr><td class="small"><%= fmt(h.at) %></td><td><%= h.fromLabel ? h.fromLabel + ' → ' : '' %><%= h.toLabel %></td><td class="small"><%= h.actor ? h.actor.username : '' %></td><td class="small"><%= h.reason || '' %></td></tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </section>
+  <% if (manager) { %>
+    <section class="card">
+      <h2>배정 이력 <span class="tag">FR-08</span></h2>
+      <table>
+        <thead><tr><th>구성원</th><th>배정</th><th>끝남</th></tr></thead>
+        <tbody>
+          <% assignmentHistory.forEach((h) => { %>
+            <tr>
+              <td><%- include('partials/who', { u: h.user }) %> <span class="muted small"><%= h.roleLabel %></span></td>
+              <td class="small"><%= fmt(h.assignedAt) %></td>
+              <td class="small"><%= h.active ? '참여 중' : fmt(h.releasedAt) + ' · ' + h.releaseReasonLabel + (h.replacedBy ? ' → ' + h.replacedBy.name : '') %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </section>
+  <% } %>
+</div>
+<%- include('partials/foot') %>

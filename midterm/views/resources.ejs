@@ -1,0 +1,181 @@
+<%- include('partials/head') %>
+<h1>공용 자원 <span class="tag">FR-13 · FR-14 · FR-16</span></h1>
+
+<section class="card">
+  <h2>이용 가능한 자원 <span class="tag">FR-14 · BR-07 · BR-08</span></h2>
+  <form method="get" action="/resources" class="form-row">
+    <label>시작 <input name="from" type="datetime-local" value="<%= query.from || '' %>"></label>
+    <label>종료 <input name="to" type="datetime-local" value="<%= query.to || '' %>"></label>
+    <label>분류
+      <select name="categoryId">
+        <option value="">전체</option>
+        <% categories.forEach((c) => { %><option value="<%= c.id %>" <%= query.categoryId === c.id ? 'selected' : '' %>><%= c.name %></option><% }) %>
+      </select>
+    </label>
+    <label>검색 <input name="q" value="<%= query.q || '' %>" placeholder="이름·관리 번호"></label>
+    <button>확인</button>
+  </form>
+  <p class="hint">
+    <%= fmt(window.from) %> ~ <%= fmt(window.to) %>에 <strong><%= me.roleLabel %></strong> 역할로 쓸 수 있는 자원입니다.
+    이용 최소 역할이 더 높거나, 점검중·사용불가이거나(BR-08), 그 시간대에 다른 예약이 있는(BR-07) 자원은 보이지 않습니다. 시간을 비우면 지금부터 1시간입니다.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>관리 번호</th><th>자원</th><th>분류</th><th>위치</th><th>상태</th><th>최소 역할</th></tr></thead>
+      <tbody>
+        <% available.forEach((r) => { %>
+          <tr>
+            <td class="mono"><%= r.code %></td>
+            <td><a href="/resources/<%= r.id %>"><%= r.name %></a></td>
+            <td><%= r.category.name %></td>
+            <td class="small"><%= r.location || '-' %></td>
+            <td><span class="badge res-<%= r.status %>"><%= r.statusLabel %></span></td>
+            <td><%= r.minRoleLabel %></td>
+          </tr>
+        <% }) %>
+        <% if (!available.length) { %><tr><td colspan="6" class="muted">그 시간대에 이용할 수 있는 자원이 없습니다.</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+  <p class="hint">쓰고 싶은 자원은 <a href="/my-resources">내 자원</a> 화면에서 사용 신청하세요. 배정받은 시간대가 되면 거기서 사용을 시작합니다.</p>
+</section>
+
+<% if (resources) { %>
+  <section class="card">
+    <h2>전체 자원 (관리용) <span class="tag">FR-13 · FR-16 · FR-21</span></h2>
+    <form method="get" action="/resources" class="form-row">
+      <label>상태
+        <select name="status">
+          <option value="">전체</option>
+          <% Object.entries(C.RESOURCE_STATUS_INFO).forEach(([key, info]) => { %><option value="<%= key %>" <%= query.status === key ? 'selected' : '' %>><%= info.label %></option><% }) %>
+        </select>
+      </label>
+      <label>구분
+        <select name="assignable">
+          <option value="">전체</option>
+          <option value="true" <%= query.assignable === true ? 'selected' : '' %>>정상 자원 (사용가능·사용중)</option>
+          <option value="false" <%= query.assignable === false ? 'selected' : '' %>>점검중·사용불가</option>
+        </select>
+      </label>
+      <label>분류
+        <select name="categoryId">
+          <option value="">전체</option>
+          <% categories.forEach((c) => { %><option value="<%= c.id %>" <%= query.categoryId === c.id ? 'selected' : '' %>><%= c.name %></option><% }) %>
+        </select>
+      </label>
+      <label>검색 <input name="q" value="<%= query.q || '' %>"></label>
+      <label>정렬
+        <select name="sort">
+          <% [['code', '관리 번호순'], ['name', '이름순'], ['status', '상태순'], ['-createdAt', '최근 등록순']].forEach(([value, label]) => { %>
+            <option value="<%= value %>" <%= query.sort === value ? 'selected' : '' %>><%= label %></option>
+          <% }) %>
+        </select>
+      </label>
+      <button>조회</button>
+    </form>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>관리 번호</th><th>자원</th><th>분류</th><th>위치</th><th>상태</th><th>현재 사용자</th><th>최소 역할</th></tr></thead>
+        <tbody>
+          <% resources.forEach((r) => { %>
+            <tr class="<%= r.assignable ? '' : 'dim' %>">
+              <td class="mono"><%= r.code %></td>
+              <td><a href="/resources/<%= r.id %>"><%= r.name %></a></td>
+              <td><%= r.category.name %></td>
+              <td class="small"><%= r.location || '-' %></td>
+              <td>
+                <span class="badge res-<%= r.status %>"><%= r.statusLabel %></span>
+                <% if (r.openMaintenance) { %><span class="small muted">점검: <%= r.openMaintenance.reason %></span><% } %>
+              </td>
+              <td class="small">
+                <% if (r.currentUsage) { %>
+                  <%- include('partials/who', { u: r.currentUsage.user }) %> · ~<%= fmt(r.currentUsage.dueAt) %>
+                  <% if (r.currentUsage.overdue) { %><span class="badge bad">반환 지연</span><% } %>
+                <% } else { %>-<% } %>
+              </td>
+              <td><%= r.minRoleLabel %></td>
+            </tr>
+          <% }) %>
+          <% if (!resources.length) { %><tr><td colspan="7" class="muted">조건에 맞는 자원이 없습니다.</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
+    <%- include('partials/pager', { meta }) %>
+    <p class="hint">점검중·사용불가 자원은 흐리게 표시되며 업무·구성원에게 배정할 수 없습니다(BR-08).</p>
+  </section>
+
+  <div class="cols">
+    <section class="card">
+      <h2>진행 중인 점검 <span class="tag">FR-16</span></h2>
+      <% if (maintenances.length) { %>
+        <ul>
+          <% maintenances.forEach((m) => { %>
+            <li><a href="/resources/<%= m.resource.id %>"><%= m.resource.name %></a> <span class="badge"><%= m.sourceLabel %></span> <%= m.reason %>
+              <span class="muted small">· 예정 <%= fmt(m.expectedEndAt) %></span><% if (m.overdue) { %> <span class="badge bad">예정일 초과</span><% } %></li>
+          <% }) %>
+        </ul>
+      <% } else { %><p class="muted">진행 중인 점검이 없습니다.</p><% } %>
+    </section>
+    <section class="card">
+      <h2>미반환 자원 <span class="tag">FR-15</span></h2>
+      <% if (overdue.length) { %>
+        <ul>
+          <% overdue.forEach((u) => { %>
+            <li><a href="/resources/<%= u.resource.id %>"><%= u.resource.name %></a> · <%- include('partials/who', { u: u.user }) %>
+              <span class="muted small">· 반환 예정 <%= fmt(u.dueAt) %></span> <span class="badge bad">반환 지연</span></li>
+          <% }) %>
+        </ul>
+      <% } else { %><p class="muted">반환 예정 시각이 지난 자원이 없습니다.</p><% } %>
+    </section>
+  </div>
+<% } %>
+
+<div class="cols">
+  <section class="card">
+    <h2>자원 분류 <span class="tag">FR-13</span></h2>
+    <table>
+      <thead><tr><th>분류</th><th>자원 (사용가능/전체)</th><th></th></tr></thead>
+      <tbody>
+        <% categories.forEach((c) => { %>
+          <tr>
+            <td><%= c.name %><% if (c.description) { %> <span class="muted small"><%= c.description %></span><% } %></td>
+            <td><%= c.availableCount %>/<%= c.resourceCount %></td>
+            <td><% if (can('resourceCategory.manage') && c.resourceCount === 0) { %><form method="post" action="/resource-categories/<%= c.id %>/delete"><button class="ghost small">삭제</button></form><% } %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% if (can('resourceCategory.manage')) { %>
+      <form method="post" action="/resource-categories" class="form-row">
+        <input name="name" required maxlength="50" placeholder="새 분류 이름">
+        <input name="description" maxlength="300" placeholder="설명">
+        <button class="small">분류 등록</button>
+      </form>
+    <% } %>
+  </section>
+
+  <% if (can('resource.manage')) { %>
+    <section class="card">
+      <h2>자원 등록 <span class="tag">FR-13</span></h2>
+      <form method="post" action="/resources">
+        <div class="form-row">
+          <label>관리 번호 <input name="code" required maxlength="30" placeholder="예: VH-010" size="10"></label>
+          <label>이름 <input name="name" required maxlength="100"></label>
+          <label>분류
+            <select name="categoryId" required><% categories.forEach((c) => { %><option value="<%= c.id %>"><%= c.name %></option><% }) %></select>
+          </label>
+        </div>
+        <div class="form-row">
+          <label>위치 <input name="location" maxlength="100"></label>
+          <label>이용 최소 역할
+            <select name="minRole"><% C.RESOURCE_MIN_ROLES.forEach((r) => { %><option value="<%= r %>"><%= C.ROLE_INFO[r].label %></option><% }) %></select>
+          </label>
+          <label>설명 <input name="description" maxlength="1000"></label>
+        </div>
+        <button>등록</button>
+        <p class="hint">등록한 자원은 사용가능 상태입니다. 관리 번호는 겹칠 수 없습니다.</p>
+      </form>
+    </section>
+  <% } %>
+</div>
+<%- include('partials/foot') %>

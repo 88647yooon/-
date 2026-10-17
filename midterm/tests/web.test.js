@@ -5,6 +5,7 @@ const config = require('../config');
 const crewModel = require('../models/sql/crewModel');
 const userModel = require('../models/sql/userModel');
 const SecurityEvent = require('../models/mongo/SecurityEvent');
+const { getPool } = require('../config/database');
 const { startServer, makeUser } = require('./helpers');
 
 let t;
@@ -62,11 +63,11 @@ function browser() {
 }
 
 describe('웹 화면 (CR-02)', () => {
-  it('홈 화면에 단계 1·2 기능 요구사항 확인 목록과 시나리오, 테스트 계정이 보인다', async () => {
+  it('홈 화면에 구현한 단계의 기능 요구사항 확인 목록과 시나리오, 테스트 계정이 보인다', async () => {
     const res = await browser().get('/');
     assert.equal(res.status, 200);
     assert.match(res.type, /^text\/html/);
-    for (const text of ['기능 요구사항 확인', 'FR-01', 'FR-06', '업무 규칙 확인 시나리오', 'BR-01', 'BR-05', '테스트 계정', 'underboss1']) {
+    for (const text of ['기능 요구사항 확인', 'FR-01', 'FR-06', 'FR-07', 'FR-12', 'FR-13', 'FR-17', '업무 규칙 확인 시나리오', 'BR-01', 'BR-05', 'BR-03', 'BR-06', 'BR-07', 'BR-08', '테스트 계정', 'underboss1']) {
       assert.ok(res.html.includes(text), `홈 화면에 '${text}' 없음`);
     }
   });
@@ -192,5 +193,138 @@ describe('웹 화면 (CR-02)', () => {
     assert.equal(res.status, 302);
     assert.ok(!b.jar.has('family_token'));
     assert.equal((await t.api('GET', '/api/me', { token })).status, 401);
+  });
+});
+
+describe('업무 화면 (단계 3)', () => {
+  // 화면의 날짜·시간 입력칸 형식(YYYY-MM-DDTHH:mm, 한국 시간)
+  const HOUR = 60 * 60 * 1000;
+  const BASE = Math.floor(Date.now() / HOUR) * HOUR + (400 + Math.floor(Math.random() * 3000)) * 24 * HOUR;
+  const local = (hours) => new Date(BASE + hours * HOUR + 9 * HOUR).toISOString().slice(0, 16);
+  const taskIdByTitle = async (title) => (await getPool().query('SELECT id FROM tasks WHERE title = ? ORDER BY id LIMIT 1', [title]))[0][0].id;
+
+  it('업무 목록·상세·내 업무 화면이 열리고 시드 업무가 보인다', async () => {
+    const b = browser();
+    await b.login('boss');
+    const list = await b.get('/tasks');
+    assert.equal(list.status, 200);
+    assert.ok(list.html.includes('업무 등록') && list.html.includes('강북 정기 순찰'));
+    const detail = await b.get(`/tasks/${await taskIdByTitle('강북 정기 순찰')}`);
+    assert.equal(detail.status, 200);
+    for (const text of ['참여자', '지시사항', '체크리스트', '상태 변경 이력', '배정 이력']) assert.ok(detail.html.includes(text), text);
+
+    const s = browser();
+    await s.login('soldier1');
+    const mine = await s.get('/my-tasks');
+    assert.equal(mine.status, 200);
+    assert.ok(mine.html.includes('강북 정기 순찰'));
+    assert.equal((await s.get('/tasks')).status, 403); // Soldier는 업무 탐색 권한이 없다
+  });
+
+  it('BR-02·BR-03: 화면에서 정지 구성원이나 시간이 겹치는 구성원을 배정하면 규칙 메시지가 보인다', async () => {
+    const busy = await makeUser(t, tokens);
+    const b = browser();
+    await b.login('boss');
+    const first = await b.post('/tasks', { title: '웹 배정 A', startAt: local(0), endAt: local(2) }, '/tasks');
+    assert.match(first.location, /^\/tasks\/\d+$/);
+    assert.equal((await b.flashAfter(`${first.location}/assignees`, { usernames: busy.username }, first.location)).type, 'success');
+
+    const second = await b.post('/tasks', { title: '웹 배정 B', startAt: local(1), endAt: local(3) }, '/tasks');
+    const overlap = await b.flashAfter(`${second.location}/assignees`, { usernames: busy.username }, second.location);
+    assert.equal(overlap.type, 'error');
+    assert.match(overlap.text, /BR-03/);
+    const suspended = await b.flashAfter(`${second.location}/assignees`, { usernames: 'suspended1' }, second.location);
+    assert.match(suspended.text, /BR-02/);
+  });
+
+  it('BR-06: Capo가 화면에서 완료된 업무의 결과를 정정하면 BR-06 메시지가 보인다', async () => {
+    const path = `/tasks/${await taskIdByTitle('강남 정보 수집')}`;
+    const b = browser();
+    await b.login('capo2');
+    const page = await b.get(path);
+    assert.ok(page.html.includes('완료와 결과') && page.html.includes('동향 보고서'));
+    const flash = await b.flashAfter(`${path}/result`, { summary: '조작된 결과', reason: '시도' }, path);
+    assert.equal(flash.type, 'error');
+    assert.match(flash.text, /BR-06/);
+  });
+});
+
+describe('자원 화면 (단계 4)', () => {
+  const HOUR = 60 * 60 * 1000;
+  const BASE = Math.floor(Date.now() / HOUR) * HOUR + (400 + Math.floor(Math.random() * 3000)) * 24 * HOUR;
+  // 화면의 날짜·시간 입력칸 형식(YYYY-MM-DDTHH:mm, 한국 시간)
+  const toLocal = (ms) => new Date(ms + 9 * HOUR).toISOString().slice(0, 16);
+  const local = (hours) => toLocal(BASE + hours * HOUR);
+  const categoryId = async () => (await getPool().query("SELECT id FROM resource_categories WHERE name = '차량'"))[0][0].id;
+  const code = () => `W-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+  async function newResource(b) {
+    const res = await b.post('/resources', { code: code(), name: '웹 테스트 자원', categoryId: String(await categoryId()) }, '/resources');
+    assert.match(res.location, /^\/resources\/\d+$/);
+    const page = await b.get(res.location);
+    return { path: res.location, code: page.html.match(/<span class="mono small">([^<]+)<\/span>/)[1] };
+  }
+
+  it('자원 목록·상세·내 자원 화면이 역할에 맞게 열린다', async () => {
+    const b = browser();
+    await b.login('boss');
+    const list = await b.get('/resources?q=VH-001');
+    assert.equal(list.status, 200);
+    for (const text of ['이용 가능한 자원', '전체 자원 (관리용)', '진행 중인 점검', '미반환 자원', '자원 분류', '자원 등록', 'VH-001']) assert.ok(list.html.includes(text), text);
+    const id = (await getPool().query("SELECT id FROM resources WHERE code = 'VH-001'"))[0][0].id;
+    const detail = await b.get(`/resources/${id}`);
+    for (const text of ['현재 상태', '시간대 가용 여부', '예약 일정', '사용·반환 이력', '상태 변경 이력', '자원 관리']) assert.ok(detail.html.includes(text), text);
+
+    const s = browser();
+    await s.login('soldier1');
+    const soldierList = await s.get('/resources');
+    assert.ok(soldierList.html.includes('이용 가능한 자원'));
+    assert.ok(!soldierList.html.includes('전체 자원 (관리용)'));
+    assert.equal((await s.get('/my-resources')).status, 200);
+
+    const a = browser();
+    await a.login('associate1');
+    assert.equal((await a.get('/resources')).status, 403);
+  });
+
+  it('BR-07·BR-08: 화면에서 겹치는 시간대나 사용불가 자원을 배정하면 규칙 메시지가 보인다', async () => {
+    const b = browser();
+    await b.login('boss');
+    const resource = await newResource(b);
+    const first = await b.post('/tasks', { title: '웹 자원 A', startAt: local(0), endAt: local(2) }, '/tasks');
+    assert.equal((await b.flashAfter(`${first.location}/resources`, { code: resource.code }, first.location)).type, 'success');
+    const second = await b.post('/tasks', { title: '웹 자원 B', startAt: local(1), endAt: local(3) }, '/tasks');
+    const overlap = await b.flashAfter(`${second.location}/resources`, { code: resource.code }, second.location);
+    assert.equal(overlap.type, 'error');
+    assert.match(overlap.text, /BR-07/);
+    const member = await b.flashAfter(`${resource.path}/allocations`, { username: 'soldier1', startAt: local(1.5), endAt: local(2.5) }, resource.path);
+    assert.match(member.text, /BR-07/);
+
+    assert.equal((await b.flashAfter(`${resource.path}/status`, { status: 'UNAVAILABLE', reason: '웹 테스트' }, resource.path)).type, 'success');
+    const third = await b.post('/tasks', { title: '웹 자원 C', startAt: local(5), endAt: local(6) }, '/tasks');
+    const broken = await b.flashAfter(`${third.location}/resources`, { code: resource.code }, third.location);
+    assert.match(broken.text, /BR-08/);
+  });
+
+  it('FR-15: 화면에서 배정받은 자원을 사용·반환하면 자원 화면의 사용 이력에 남는다', async () => {
+    const user = await makeUser(t, tokens);
+    const b = browser();
+    await b.login('boss');
+    const resource = await newResource(b);
+    const now = Date.now();
+    const allocated = await b.flashAfter(`${resource.path}/allocations`, { username: user.username, startAt: toLocal(now - 60 * 1000), endAt: toLocal(now + 2 * HOUR) }, resource.path);
+    assert.equal(allocated.type, 'success', allocated.text);
+
+    const u = browser();
+    await u.login(user.username, user.password);
+    assert.ok((await u.get('/my-resources')).html.includes(resource.code));
+    const resourceId = resource.path.split('/').pop();
+    assert.equal((await u.flashAfter(`/resources/${resourceId}/checkout`, {}, '/my-resources')).type, 'success');
+    assert.ok((await u.get('/my-resources')).html.includes('지금 사용 중인 자원'));
+    const returned = await u.flashAfter(`/resources/${resourceId}/return`, { condition: 'GOOD', note: '웹 반환' }, '/my-resources');
+    assert.match(returned.text, /사용가능/);
+
+    const history = await b.get(resource.path);
+    assert.ok(history.html.includes(user.username) && history.html.includes('웹 반환'));
   });
 });

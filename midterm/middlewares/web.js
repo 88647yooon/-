@@ -43,6 +43,19 @@ const dateFormat = new Intl.DateTimeFormat('ko-KR', {
 });
 const formatDate = (value) => (value ? dateFormat.format(new Date(value)) : '-');
 
+// 화면의 날짜·시간 입력칸(datetime-local)은 한국 시간으로 보고, 입력칸 기본값도 한국 시간으로 채운다.
+const KST_OFFSET = 9 * 60 * 60 * 1000;
+const toLocalInput = (value) => (value ? new Date(new Date(value).getTime() + KST_OFFSET).toISOString().slice(0, 16) : '');
+
+// 시간대 없이 온 날짜·시간 입력값(YYYY-MM-DDTHH:mm)에 한국 시간대를 붙인다. 검증(validate) 앞에 둔다.
+const kstDatetimes = (...names) => (req, res, next) => {
+  for (const name of names) {
+    const value = req.body?.[name];
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) req.body[name] = `${value}:00+09:00`;
+  }
+  next();
+};
+
 // 모든 화면 요청: 로그인 사용자를 확인하고 템플릿이 함께 쓰는 값을 준비한다.
 async function webContext(req, res, next) {
   const cookies = parseCookies(req);
@@ -66,6 +79,7 @@ async function webContext(req, res, next) {
   res.locals.can = () => false;
   res.locals.C = constants;
   res.locals.fmt = formatDate;
+  res.locals.toLocalInput = toLocalInput;
   res.locals.path = req.path;
   res.locals.pageUrl = (page) => `${req.path}?${new URLSearchParams({ ...req.query, page: String(page) })}`;
 
@@ -132,6 +146,7 @@ module.exports = {
   setFlash,
   safeNext,
   backPath,
+  kstDatetimes,
   webContext,
   requireLogin,
   webNotFound,

@@ -59,7 +59,8 @@ function checkValue(value, rule, field, coerce, errors) {
       if (typeof v !== 'string' || !ISO_DATETIME.test(v) || Number.isNaN(Date.parse(v))) {
         return fail('ISO 8601 날짜·시간이어야 합니다. 예: 2026-10-20T09:00:00+09:00');
       }
-      v = new Date(v);
+      // DB(DATETIME)는 초 단위로 저장하므로 밀리초를 버려, 저장값과 비교값(시간 겹침 검사 등)이 항상 같게 한다.
+      v = new Date(Math.floor(Date.parse(v) / 1000) * 1000);
       break;
     }
     case 'array': {

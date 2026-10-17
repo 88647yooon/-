@@ -9,6 +9,8 @@ const actorOf = (user) => (user ? { userId: user.id, username: user.username, ro
 
 const userTarget = (user) => ({ entity: 'user', id: String(user.id), label: user.username });
 const crewTarget = (crew) => ({ entity: 'crew', id: String(crew.id), label: crew.name });
+const taskTarget = (task) => ({ entity: 'task', id: String(task.id), label: task.title });
+const resourceTarget = (resource) => ({ entity: 'resource', id: String(resource.id), label: `${resource.code} ${resource.name}` });
 
 async function safely(label, fn) {
   try {
@@ -50,4 +52,4 @@ async function recordAccessDenied({ user, req, reason, details }) {
     }));
 }
 
-module.exports = { record, recordMany, recordLogin, recordAccessDenied, userTarget, crewTarget };
+module.exports = { record, recordMany, recordLogin, recordAccessDenied, userTarget, crewTarget, taskTarget, resourceTarget };

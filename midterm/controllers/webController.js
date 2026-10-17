@@ -11,38 +11,10 @@ const crewService = require('../services/crewService');
 const membershipService = require('../services/membershipService');
 const joinRequestService = require('../services/joinRequestService');
 const roleRequestService = require('../services/roleRequestService');
-const { setLoginCookie, clearLoginCookie, setFlash, safeNext, backPath } = require('../middlewares/web');
+const { setLoginCookie, clearLoginCookie, setFlash, safeNext } = require('../middlewares/web');
 const { CHECKS, SCENARIOS } = require('./webGuide');
+const { optional, denied, userIdOf, action, nothingChanged } = require('./webHelpers');
 const { contextOf } = require('../utils/context');
-const { notFound } = require('../utils/errors');
-
-// 권한이 없어 볼 수 없는 영역은 화면 전체를 막지 않고 그 자리에 이유를 보여 준다.
-async function optional(load) {
-  try {
-    return { ok: true, value: await load() };
-  } catch (err) {
-    if (err.status === 403 || err.status === 404) return { ok: false, message: err.message };
-    throw err;
-  }
-}
-const denied = (message) => ({ ok: false, message });
-
-// 화면에서는 구성원을 아이디로 입력받는다.
-async function userIdOf(username) {
-  const user = await userModel.findByUsername(username);
-  if (!user) throw notFound(`아이디가 '${username}'인 구성원을 찾을 수 없습니다.`);
-  return user.id;
-}
-
-// 폼 처리 공통: 서비스를 호출하고 결과 메시지를 남긴 뒤 원래 화면(또는 지정한 화면)으로 돌아간다.
-// 실패하면 webErrorHandler가 오류 메시지를 남기고 원래 화면으로 돌려보낸다.
-const action = (handle) => async (req, res) => {
-  const { message, redirect, type = 'success' } = await handle(req, res);
-  setFlash(res, type, message);
-  res.redirect(redirect ?? backPath(req) ?? '/');
-};
-
-const nothingChanged = { type: 'info', message: '바꿀 항목을 입력하세요.' };
 
 // ---------------------------------------------------------------------------
 // 홈·로그인

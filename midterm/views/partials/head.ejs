@@ -16,6 +16,10 @@
         <a href="/me" class="<%= path === '/me' ? 'on' : '' %>">내 정보</a>
         <% if (can('user.list')) { %><a href="/users" class="<%= path.startsWith('/users') ? 'on' : '' %>">구성원</a><% } %>
         <a href="/crews" class="<%= path.startsWith('/crews') ? 'on' : '' %>">Crew</a>
+        <% if (can('task.list')) { %><a href="/tasks" class="<%= path.startsWith('/tasks') ? 'on' : '' %>">업무</a><% } %>
+        <% if (can('task.participate')) { %><a href="/my-tasks" class="<%= path === '/my-tasks' ? 'on' : '' %>">내 업무</a><% } %>
+        <% if (can('resource.read')) { %><a href="/resources" class="<%= path.startsWith('/resources') ? 'on' : '' %>">자원</a><% } %>
+        <% if (can('resource.use')) { %><a href="/my-resources" class="<%= path === '/my-resources' ? 'on' : '' %>">내 자원</a><% } %>
         <% if (can('roleRequest.read')) { %><a href="/role-requests" class="<%= path.startsWith('/role-requests') ? 'on' : '' %>">역할 변경 요청</a><% } %>
       <% } %>
       <a href="/api-docs">API 문서(Swagger)</a>

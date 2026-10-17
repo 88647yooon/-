@@ -1,11 +1,12 @@
-// 내 정보 API (API 목록표 단계 1: #6~#9, 단계 2: #50)
+// 내 정보 API (API 목록표 단계 1: #6~#9, 단계 2: #50, 단계 3: #94~#96)
 const express = require('express');
 const meController = require('../controllers/meController');
 const joinRequestController = require('../controllers/joinRequestController');
+const taskController = require('../controllers/taskController');
 const { validate } = require('../middlewares/validate');
 const { authenticate } = require('../middlewares/authenticate');
 const { requirePermission } = require('../middlewares/authorize');
-const { paging, enums } = require('./rules');
+const { paging, enums, fields } = require('./rules');
 
 const router = express.Router();
 router.use(authenticate);
@@ -177,6 +178,81 @@ router.get(
   requirePermission('me.read'),
   validate({ query: { status: enums.requestStatus, ...paging() } }),
   joinRequestController.listMine,
+);
+
+/**
+ * @openapi
+ * /api/me/tasks:
+ *   get:
+ *     tags: [내 업무]
+ *     summary: 내게 배정된 업무 목록
+ *     description: |
+ *       [FR-09] 내가 현재 참여 중인 업무와 내 역할·배정 응답을 돌려준다. 업무 상태·배정 응답·기간으로 거를 수 있다.
+ *     parameters:
+ *       - $ref: '#/components/parameters/TaskStatusFilter'
+ *       - { name: response, in: query, schema: { $ref: '#/components/schemas/AssignmentResponse' } }
+ *       - $ref: '#/components/parameters/From'
+ *       - $ref: '#/components/parameters/To'
+ *       - $ref: '#/components/parameters/MyTaskSort'
+ *       - $ref: '#/components/parameters/Page'
+ *       - $ref: '#/components/parameters/Size'
+ *     responses:
+ *       200: { $ref: '#/components/responses/MyTaskPage' }
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ */
+router.get(
+  '/tasks',
+  requirePermission('me.read'),
+  validate({
+    query: {
+      status: enums.taskStatus, response: enums.assignmentResponse, from: fields.optionalDatetime, to: fields.optionalDatetime, ...paging('myTasks'),
+    },
+  }),
+  taskController.myTasks,
+);
+
+/**
+ * @openapi
+ * /api/me/tasks/{taskId}:
+ *   get:
+ *     tags: [내 업무]
+ *     summary: 내 업무 상세 (참여자 관점)
+ *     description: |
+ *       [FR-09] 내가 참여 중인 업무에서 내가 확인해야 할 정보를 한 번에 돌려준다: 업무 정보, 내 역할·응답, 나에게 온 지시사항, 함께하는 참여자, 체크리스트,
+ *       업무에 할당된 자원(시간대와 지금 누가 쓰는지). 내게 배정된 업무가 아니면 404다.
+ *     parameters:
+ *       - $ref: '#/components/parameters/TaskId'
+ *     responses:
+ *       200: { $ref: '#/components/responses/MyTaskOne' }
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.get('/tasks/:taskId', requirePermission('me.read'), validate({ params: { taskId: fields.id } }), taskController.myTask);
+
+/**
+ * @openapi
+ * /api/me/schedule:
+ *   get:
+ *     tags: [내 업무]
+ *     summary: 내 일정
+ *     description: |
+ *       [FR-09] 기간과 겹치는 내 업무(취소된 업무 제외, 업무에 할당된 자원 포함)와 나에게 배정된 자원(kind=RESOURCE, 지금 사용 중인지 포함)을
+ *       시작 시각 순으로 돌려준다. from을 생략하면 지금부터, to를 생략하면 from부터 14일이다.
+ *     parameters:
+ *       - $ref: '#/components/parameters/From'
+ *       - $ref: '#/components/parameters/To'
+ *     responses:
+ *       200: { $ref: '#/components/responses/ScheduleOne' }
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ */
+router.get(
+  '/schedule',
+  requirePermission('me.read'),
+  validate({ query: { from: fields.optionalDatetime, to: fields.optionalDatetime } }),
+  taskController.mySchedule,
 );
 
 module.exports = router;

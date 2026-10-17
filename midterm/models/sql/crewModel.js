@@ -100,8 +100,9 @@ async function usage(id, db = getPool()) {
     `SELECT
        (SELECT COUNT(*) FROM crew_memberships WHERE crew_id = ? OR from_crew_id = ? OR to_crew_id = ?) AS memberships,
        (SELECT COUNT(*) FROM crew_join_requests WHERE crew_id = ?) AS joinRequests,
-       (SELECT COUNT(*) FROM crew_capo_terms WHERE crew_id = ?) AS capoTerms`,
-    [id, id, id, id, id],
+       (SELECT COUNT(*) FROM crew_capo_terms WHERE crew_id = ?) AS capoTerms,
+       (SELECT COUNT(*) FROM tasks WHERE crew_id = ?) AS tasks`,
+    [id, id, id, id, id, id],
   );
   return row;
 }

@@ -67,6 +67,19 @@ td form { display: inline-flex; gap: 4px; margin: 0 4px 0 0; align-items: center
 .badge.status-PENDING { background: #fff4dd; color: #8a5a00; }
 .badge.status-WITHDRAWN { background: #eceef2; color: #6b7280; }
 .tag { font-size: .75rem; color: var(--muted); font-weight: 400; margin-left: 6px; }
+.badge.task-PLANNED { background: #e9f1fb; color: #1e4f8c; }
+.badge.task-IN_PROGRESS { background: var(--ok-bg); color: var(--ok-ink); }
+.badge.task-ON_HOLD { background: #fff4dd; color: #8a5a00; }
+.badge.task-COMPLETED { background: #eceef2; color: #3a4150; }
+.badge.task-CANCELLED { background: var(--err-bg); color: var(--err-ink); }
+.badge.prio-HIGH { background: #fff4dd; color: #8a5a00; }
+.badge.prio-CRITICAL { background: var(--err-bg); color: var(--err-ink); }
+.badge.res-AVAILABLE { background: var(--ok-bg); color: var(--ok-ink); }
+.badge.res-IN_USE { background: #e9f1fb; color: #1e4f8c; }
+.badge.res-MAINTENANCE { background: #fff4dd; color: #8a5a00; }
+.badge.res-UNAVAILABLE { background: var(--err-bg); color: var(--err-ink); }
+tr.dim td { color: var(--muted); }
+h1 .badge { vertical-align: middle; font-size: .8rem; }
 
 /* 알림 메시지 */
 .flash { border-radius: 8px; padding: 10px 14px; margin: 16px 0 0; }

@@ -1,6 +1,7 @@
-// 구성원 API (API 목록표 단계 2: #10~#21)
+// 구성원 API (API 목록표 단계 2: #10~#21, 단계 3: #91)
 const express = require('express');
 const userController = require('../controllers/userController');
+const taskController = require('../controllers/taskController');
 const { validate } = require('../middlewares/validate');
 const { authenticate } = require('../middlewares/authenticate');
 const { requirePermission } = require('../middlewares/authorize');
@@ -447,5 +448,33 @@ router.get(
  *       404: { $ref: '#/components/responses/NotFound' }
  */
 router.get('/:userId/chain-of-command', requirePermission('user.records.read'), validate(userIdParams), userController.chainOfCommand);
+
+/**
+ * @openapi
+ * /api/users/{userId}/availability:
+ *   get:
+ *     tags: [업무 배정]
+ *     summary: 구성원 가용 여부
+ *     description: |
+ *       [BR-03] 한 구성원이 지정한 시간대(from~to)에 새 업무를 맡을 수 있는지와, 그 시간대에 겹치는 끝나지 않은 업무를 돌려준다.
+ *       시간과 관계없이 배정할 수 없는 경우(정지·탈퇴, Administrator)는 unassignableReason에 이유를 담는다.
+ *       본인, 그 구성원이 속한 Crew의 책임자, Underboss·Boss만 볼 수 있다.
+ *     parameters:
+ *       - $ref: '#/components/parameters/UserId'
+ *       - { name: from, in: query, required: true, schema: { type: string, format: date-time, example: '2026-10-25T09:00:00+09:00' } }
+ *       - { name: to, in: query, required: true, schema: { type: string, format: date-time, example: '2026-10-25T18:00:00+09:00' } }
+ *     responses:
+ *       200: { $ref: '#/components/responses/AvailabilityOne' }
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.get(
+  '/:userId/availability',
+  requirePermission('user.records.read'),
+  validate({ ...userIdParams, query: { from: fields.datetime, to: fields.datetime } }),
+  taskController.availability,
+);
 
 module.exports = router;

@@ -2,6 +2,7 @@
 const { getPool } = require('../../config/database');
 const { where, like, orderBy, RANK_SQL } = require('../../utils/sql');
 const { limitOffset } = require('../../utils/pagination');
+const { ASSIGNABLE_ROLES, OPEN_TASK_STATUSES } = require('../../config/constants');
 
 const FIELDS = ['id', 'username', 'password_hash', 'name', 'nickname', 'phone', 'email', 'role', 'status',
   'failed_login_count', 'last_login_at', 'locked_at', 'locked_reason', 'password_changed_at', 'created_at', 'updated_at'];
@@ -129,10 +130,40 @@ async function activitySummary(id, db = getPool()) {
        (SELECT COUNT(*) FROM crews WHERE capo_id = ? OR underboss_id = ?) AS crewRoles,
        (SELECT COUNT(*) FROM crew_capo_terms WHERE user_id = ?) AS capoTerms,
        (SELECT COUNT(*) FROM crew_join_requests WHERE user_id = ?) AS joinRequests,
-       (SELECT COUNT(*) FROM role_change_requests WHERE user_id = ? OR requested_by = ?) AS roleRequests`,
-    [id, id, id, id, id, id, id],
+       (SELECT COUNT(*) FROM role_change_requests WHERE user_id = ? OR requested_by = ?) AS roleRequests,
+       (SELECT COUNT(*) FROM task_assignees WHERE user_id = ?) AS taskAssignments,
+       (SELECT COUNT(*) FROM task_swap_requests WHERE from_user_id = ? OR to_user_id = ?) AS swapRequests,
+       (SELECT COUNT(*) FROM task_participations WHERE user_id = ?) AS participations,
+       (SELECT COUNT(*) FROM resource_allocations WHERE user_id = ?) AS resourceAllocations,
+       (SELECT COUNT(*) FROM resource_requests WHERE user_id = ?) AS resourceRequests,
+       (SELECT COUNT(*) FROM resource_usages WHERE user_id = ?) AS resourceUsages`,
+    [id, id, id, id, id, id, id, id, id, id, id, id, id, id],
   );
   return row;
+}
+
+// 업무 배정 후보 (BR-02, BR-03): 활동중, 업무를 맡을 수 있는 역할, 이 업무에 아직 배정되지 않았고,
+// 업무 시간대에 다른 진행 중 배정이 없는 구성원. crewId를 주면 그 Crew의 현재 소속원으로 좁힌다.
+async function searchAssignable({ taskId, startAt, endAt, crewId, role, q, sort = 'name', ...paging }, db = getPool()) {
+  const w = where([
+    ["u.status = 'ACTIVE'"],
+    ['u.role IN (?)', ASSIGNABLE_ROLES],
+    role && ['u.role = ?', role],
+    crewId && ['EXISTS (SELECT 1 FROM crew_memberships cm WHERE cm.user_id = u.id AND cm.crew_id = ? AND cm.left_at IS NULL)', crewId],
+    ['NOT EXISTS (SELECT 1 FROM task_assignees a WHERE a.task_id = ? AND a.user_id = u.id AND a.released_at IS NULL)', taskId],
+    [`NOT EXISTS (SELECT 1 FROM task_assignees a JOIN tasks t ON t.id = a.task_id
+        WHERE a.user_id = u.id AND a.released_at IS NULL AND t.status IN (?) AND t.id <> ? AND ? < t.end_at AND t.start_at < ?)`,
+    OPEN_TASK_STATUSES, taskId, startAt, endAt],
+    q && ['(u.name LIKE ? OR u.username LIKE ? OR u.nickname LIKE ?)', like(q), like(q), like(q)],
+  ]);
+  const from = `FROM users u
+    LEFT JOIN crew_memberships rm ON rm.user_id = u.id AND rm.type = 'REGULAR' AND rm.left_at IS NULL`;
+  const [rows] = await db.query(
+    `SELECT ${U_COLUMNS}, rm.crew_id AS regular_crew_id ${from} ${w.sql} ${orderBy(sort, SORT_COLUMNS, 'u.id')} LIMIT ? OFFSET ?`,
+    [...w.params, ...limitOffset(paging)],
+  );
+  const [[{ total }]] = await db.query(`SELECT COUNT(*) AS total ${from} ${w.sql}`, w.params);
+  return { rows: rows.map((r) => ({ ...toUser(r), regularCrewId: r.regular_crew_id })), total };
 }
 
 // 구성원 목록 검색. 각 행에 현재 정식 소속 Crew ID(regularCrewId)를 붙인다.
@@ -198,4 +229,5 @@ module.exports = {
   activitySummary,
   search,
   searchCandidates,
+  searchAssignable,
 };

@@ -1,0 +1,254 @@
+<%- include('partials/head') %>
+<h1><%= resource.name %> <span class="mono small"><%= resource.code %></span>
+  <span class="badge res-<%= resource.status %>"><%= resource.statusLabel %></span>
+</h1>
+<p class="muted"><%= resource.category.name %><%= resource.location ? ' · ' + resource.location : '' %> · <%= resource.minRoleLabel %> 이상 이용 · <a href="/resources">자원 목록</a></p>
+
+<div class="cols">
+  <section class="card">
+    <h2>현재 상태 <span class="tag">FR-13 · FR-16 · DR-03</span></h2>
+    <dl class="facts">
+      <dt>상태</dt>
+      <dd>
+        <span class="badge res-<%= resource.status %>"><%= resource.statusLabel %></span>
+        <%= resource.assignable ? '새로 배정할 수 있음' : '새로 배정할 수 없음 (BR-08)' %>
+        <% if (resource.statusChangedAt) { %><span class="muted small">· <%= fmt(resource.statusChangedAt) %>부터</span><% } %>
+      </dd>
+      <dt>현재 사용자</dt>
+      <dd>
+        <% if (usage) { %>
+          <%- include('partials/who', { u: usage.user }) %><%= usage.task ? ` · 업무 '${usage.task.title}'` : ' · 구성원 배정' %>
+          <br><span class="small"><%= fmt(usage.startedAt) %>부터 · 반환 예정 <%= fmt(usage.dueAt) %></span>
+          <% if (usage.overdue) { %><span class="badge bad">반환 지연</span><% } %>
+          <% if (usage.damageReported) { %><span class="badge bad">고장 신고됨</span><% } %>
+        <% } else { %><span class="muted">사용 중이 아님</span><% } %>
+      </dd>
+      <dt>진행 중인 점검</dt>
+      <dd>
+        <% if (resource.openMaintenance) { %>
+          <%= resource.openMaintenance.reason %> <span class="muted small">· 예정 <%= fmt(resource.openMaintenance.expectedEndAt) %></span>
+          <% if (resource.openMaintenance.overdue) { %><span class="badge bad">예정일 초과</span><% } %>
+        <% } else { %><span class="muted">없음</span><% } %>
+      </dd>
+      <dt>설명</dt><dd><%= resource.description || '-' %></dd>
+      <dt>등록</dt><dd><%- include('partials/who', { u: resource.createdBy }) %> · <%= fmt(resource.createdAt) %></dd>
+    </dl>
+
+    <% if (usage && (mine || can('resource.monitor'))) { %>
+      <h3>반환 <span class="tag">FR-15 · FR-16</span></h3>
+      <form method="post" action="/resources/<%= resource.id %>/return" class="form-row">
+        <select name="condition"><% Object.entries(C.RETURN_CONDITION_INFO).forEach(([key, info]) => { %><option value="<%= key %>"><%= info.label %></option><% }) %></select>
+        <input name="note" maxlength="500" placeholder="메모 (손상 내용 등)">
+        <button>반환</button>
+      </form>
+      <p class="hint">손상이면 점검이 자동으로 등록되어 점검중, 분실이면 사용불가가 됩니다. <%= mine ? '' : '사용자 대신 반환 처리합니다 (그 업무·구성원을 맡은 Capo, Underboss·Boss).' %></p>
+    <% } %>
+    <% if (usage && mine) { %>
+      <div class="forms">
+        <form method="post" action="/resource-usages/<%= usage.usageId %>/handover">
+          <h3>인계</h3>
+          <div class="form-row">
+            <label>받는 사람 아이디 <input name="username" required size="12"></label>
+            <label>새 반환 예정 <input name="dueAt" type="datetime-local"></label>
+          </div>
+          <input name="note" maxlength="500" placeholder="메모"> <button class="ghost small">인계</button>
+          <p class="hint">업무 자원은 같은 업무의 참여자에게만 넘길 수 있습니다. 반환 예정을 늘리면 BR-07을 검사합니다.</p>
+        </form>
+        <form method="post" action="/resource-usages/<%= usage.usageId %>/damage">
+          <h3>고장 신고</h3>
+          <input name="description" required maxlength="500" placeholder="고장 내용" size="24"> <button class="ghost small">신고</button>
+          <p class="hint">점검이 자동으로 등록되고 점검중이 됩니다. 반환은 따로 합니다.</p>
+        </form>
+      </div>
+    <% } %>
+    <% if (usage && can('resource.allocate')) { %>
+      <form method="post" action="/resource-usages/<%= usage.usageId %>/extend" class="form-row">
+        <label>반환 예정 연장 <input name="dueAt" type="datetime-local" required value="<%= toLocalInput(usage.dueAt) %>"></label>
+        <input name="reason" maxlength="500" placeholder="사유">
+        <button class="ghost small">연장</button>
+      </form>
+    <% } %>
+    <% if (!usage && can('resource.use')) { %>
+      <form method="post" action="/resources/<%= resource.id %>/checkout" class="form-row">
+        <button>사용 시작</button>
+        <span class="hint">지금이 내 구성원 배정 시간대이거나, 내가 참여 중인 업무에 할당된 시간대여야 합니다.</span>
+      </form>
+    <% } %>
+  </section>
+
+  <section class="card">
+    <h2>시간대 가용 여부 <span class="tag">BR-07 · BR-08</span></h2>
+    <form method="get" action="/resources/<%= resource.id %>" class="form-row">
+      <label>시작 <input name="from" type="datetime-local" required value="<%= query.from || '' %>"></label>
+      <label>종료 <input name="to" type="datetime-local" required value="<%= query.to || '' %>"></label>
+      <button>확인</button>
+    </form>
+    <% if (availability) { %>
+      <p>
+        <span class="badge <%= availability.available ? 'ok' : 'bad' %>"><%= availability.available ? '배정 가능' : '배정 불가' %></span>
+        <%= fmt(availability.from) %> ~ <%= fmt(availability.to) %>
+        <% if (availability.unassignableReason) { %><span class="small"><%= availability.unassignableReason %></span><% } %>
+      </p>
+      <% if (availability.conflicts.length) { %>
+        <ul class="small">
+          <% availability.conflicts.forEach((c) => { %><li><span class="badge"><%= c.kindLabel %></span> <%= fmt(c.startAt) %> ~ <%= fmt(c.endAt) %> · <%= c.task ? c.task.title : (c.user ? c.user.name : '') %></li><% }) %>
+        </ul>
+      <% } %>
+    <% } %>
+
+    <% if (can('resource.allocate')) { %>
+      <h3>구성원에게 배정 <span class="tag">FR-17</span></h3>
+      <form method="post" action="/resources/<%= resource.id %>/allocations">
+        <div class="form-row">
+          <label>아이디 <input name="username" required size="12"></label>
+          <label>시작 <input name="startAt" type="datetime-local" required></label>
+          <label>종료 <input name="endAt" type="datetime-local" required></label>
+        </div>
+        <input name="purpose" maxlength="500" placeholder="용도" size="28"> <button>배정</button>
+        <p class="hint">
+          점검중·사용불가 자원은 BR-08로, 같은 시간대에 다른 업무 할당·구성원 배정·사용 중인 기록이 있으면 BR-07로 거부됩니다.
+          <%= me.role === 'CAPO' ? 'Capo는 자신이 책임자인 Crew의 소속원에게만 배정할 수 있습니다(BR-05).' : '' %>
+        </p>
+      </form>
+    <% } %>
+  </section>
+</div>
+
+<section class="card">
+  <h2>예약 일정 (앞으로 2주) <span class="tag">FR-15 · FR-17</span></h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>구분</th><th>시간</th><th>업무 / 구성원</th><th></th></tr></thead>
+      <tbody>
+        <% schedule.items.forEach((i) => { %>
+          <tr>
+            <td><span class="badge"><%= i.kindLabel %></span></td>
+            <td class="small"><%= fmt(i.startAt) %> ~ <%= fmt(i.endAt) %></td>
+            <td><% if (i.task) { %><a href="/tasks/<%= i.task.id %>"><%= i.task.title %></a><% } %><% if (i.user) { %> <%- include('partials/who', { u: i.user }) %><% } %></td>
+            <td><% if (i.kind === 'MEMBER' && can('resource.allocate')) { %><form method="post" action="/resource-allocations/<%= i.id %>/cancel"><button class="ghost small">배정 취소</button></form><% } %></td>
+          </tr>
+        <% }) %>
+        <% if (!schedule.items.length) { %><tr><td colspan="4" class="muted">앞으로 2주 동안 잡힌 예약이 없습니다.</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<% if (can('resource.monitor')) { %>
+  <section class="card">
+    <h2>사용·반환 이력 <span class="tag">FR-15 · DR-03</span></h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>사용자</th><th>근거</th><th>사용</th><th>반환</th><th>반환 상태</th></tr></thead>
+        <tbody>
+          <% usages.forEach((u) => { %>
+            <tr>
+              <td><%- include('partials/who', { u: u.user }) %></td>
+              <td class="small"><%= u.task ? '업무: ' + u.task.title : '구성원 배정' %></td>
+              <td class="small"><%= fmt(u.startedAt) %> ~ 예정 <%= fmt(u.dueAt) %></td>
+              <td class="small"><%= u.open ? '사용 중' : fmt(u.returnedAt) %><% if (u.overdue) { %> <span class="badge bad">지연</span><% } %></td>
+              <td class="small">
+                <%= u.returnConditionLabel || '-' %><%= u.handedOverTo ? ' (→ ' + u.handedOverTo.name + ' 인계)' : '' %><%= u.returnNote ? ' · ' + u.returnNote : '' %>
+                <% if (u.damageNote) { %><br>고장 신고: <%= u.damageNote %><% } %>
+              </td>
+            </tr>
+          <% }) %>
+          <% if (!usages.length) { %><tr><td colspan="5" class="muted">사용 기록이 없습니다.</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="cols">
+    <section class="card">
+      <h2>점검 <span class="tag">FR-16</span></h2>
+      <% if (maintenances.length) { %>
+        <ul>
+          <% maintenances.forEach((m) => { %>
+            <li>
+              <span class="badge"><%= m.sourceLabel %></span> <%= m.reason %>
+              <span class="muted small">· <%= fmt(m.startedAt) %> <%= m.startedBy ? m.startedBy.name : '' %></span>
+              <% if (m.open) { %>
+                <span class="badge res-MAINTENANCE">진행 중</span><% if (m.overdue) { %> <span class="badge bad">예정일 초과</span><% } %>
+                <% if (can('resource.operate')) { %>
+                  <form method="post" action="/resources/<%= resource.id %>/maintenances/<%= m.id %>/complete" class="form-row">
+                    <select name="result"><% Object.entries(C.MAINTENANCE_RESULT_INFO).forEach(([key, info]) => { %><option value="<%= key %>"><%= info.label %></option><% }) %></select>
+                    <input name="note" maxlength="500" placeholder="점검 결과">
+                    <button class="small">점검 완료</button>
+                  </form>
+                <% } %>
+              <% } else { %>
+                <span class="small">→ <%= m.resultLabel %> (<%= fmt(m.completedAt) %>)<%= m.resultNote ? ' · ' + m.resultNote : '' %></span>
+              <% } %>
+            </li>
+          <% }) %>
+        </ul>
+      <% } else { %><p class="muted">점검 기록이 없습니다.</p><% } %>
+      <% if (can('resource.operate') && !resource.openMaintenance && !usage) { %>
+        <form method="post" action="/resources/<%= resource.id %>/maintenances" class="form-row">
+          <input name="reason" required maxlength="500" placeholder="점검 사유">
+          <label>예정 완료 <input name="expectedEndAt" type="datetime-local"></label>
+          <button class="small">점검 등록</button>
+        </form>
+      <% } %>
+    </section>
+
+    <section class="card">
+      <h2>상태 변경 이력 <span class="tag">FR-15</span></h2>
+      <table>
+        <thead><tr><th>시각</th><th>변경</th><th>경위</th><th>처리자</th><th>사유</th></tr></thead>
+        <tbody>
+          <% history.forEach((h) => { %>
+            <tr><td class="small"><%= fmt(h.at) %></td><td><%= h.fromLabel ? h.fromLabel + ' → ' : '' %><%= h.toLabel %></td><td class="small"><%= h.causeLabel || '' %></td><td class="small"><%= h.actor ? h.actor.username : '' %></td><td class="small"><%= h.reason || '' %></td></tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </section>
+  </div>
+<% } %>
+
+<% if (can('resource.operate') || can('resource.manage')) { %>
+  <section class="card">
+    <h2>자원 관리 <span class="tag">FR-13 · FR-14 · FR-16</span></h2>
+    <div class="forms">
+      <% if (can('resource.operate')) { %>
+        <form method="post" action="/resources/<%= resource.id %>/status">
+          <h3>상태 변경</h3>
+          <div class="form-row">
+            <select name="status"><% C.MANUAL_RESOURCE_STATUSES.forEach((s) => { %><option value="<%= s %>" <%= s === resource.status ? 'selected' : '' %>><%= C.RESOURCE_STATUS_INFO[s].label %></option><% }) %></select>
+            <input name="reason" required maxlength="500" placeholder="사유">
+          </div>
+          <button>변경</button>
+          <p class="hint">사용중은 사용 시작·반환으로만 바뀝니다. 진행 중인 점검은 점검 완료로 끝냅니다.</p>
+        </form>
+      <% } %>
+      <% if (can('resource.manage')) { %>
+        <form method="post" action="/resources/<%= resource.id %>/access-level">
+          <h3>이용 최소 역할</h3>
+          <div class="form-row">
+            <select name="minRole"><% C.RESOURCE_MIN_ROLES.forEach((r) => { %><option value="<%= r %>" <%= r === resource.minRole ? 'selected' : '' %>><%= C.ROLE_INFO[r].label %></option><% }) %></select>
+            <input name="reason" maxlength="500" placeholder="사유">
+          </div>
+          <button>변경</button>
+        </form>
+        <form method="post" action="/resources/<%= resource.id %>/edit">
+          <h3>정보 수정</h3>
+          <div class="form-row">
+            <label>이름 <input name="name" maxlength="100" placeholder="<%= resource.name %>"></label>
+            <label>분류
+              <select name="categoryId"><option value="">그대로</option><% categories.forEach((c) => { %><option value="<%= c.id %>"><%= c.name %></option><% }) %></select>
+            </label>
+            <label>위치 <input name="location" maxlength="100" placeholder="<%= resource.location || '' %>"></label>
+          </div>
+          <button>수정</button>
+        </form>
+        <form method="post" action="/resources/<%= resource.id %>/delete">
+          <h3>삭제</h3>
+          <button class="danger">자원 삭제</button>
+          <p class="hint">배정·사용·점검 기록이 하나도 없는 자원만 삭제할 수 있습니다. 더 쓰지 않을 자원은 사용불가로 바꾸세요.</p>
+        </form>
+      <% } %>
+    </div>
+  </section>
+<% } %>
+<%- include('partials/foot') %>

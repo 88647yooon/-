@@ -14,8 +14,14 @@
 | 역할 변경 (BR-04) | 대상의 현재 역할이 요청자와 같거나 높으면 바꿀 수 없고, 요청자보다 높은 역할로 올릴 수도 없다. 구성원 정보 수정·상태 변경에도 같은 순위 규칙을 적용한다. |
 | 구성원 상태 | 대기, 활동중, 정지, 탈퇴. 정지·탈퇴는 새 업무 배정 불가 (BR-02). |
 | 소속 유형 | 정식, 임시. 정식 소속은 한 Crew만 가능 (BR-01). Crew에는 Associate·Soldier·Capo만 소속된다. |
-| 업무 상태 | 계획, 진행, 보류, 완료, 취소. 완료 후 핵심 결과 잠금 (BR-06). |
-| 자원 상태 | 사용가능, 사용중, 점검중, 사용불가. 점검중·사용불가는 배정 불가 (BR-08). |
+| 업무 상태 | 계획, 진행, 보류, 완료, 취소. 진행·보류는 상태 변경 API, 완료는 완료 처리 API, 취소는 취소 API로만 바꾼다. 시작하려면 참여자가 한 명 이상 있고 선행 업무가 끝나 있어야 한다. |
+| 업무 관리 범위 | Crew 업무는 그 Crew의 책임자(Capo)와 Underboss·Boss가 관리하고, Crew가 없는 조직 업무는 Underboss·Boss만 관리한다. 업무의 현재 참여자는 그 업무를 볼 수 있다. Capo는 자기 Crew 소속원만 배정한다 (BR-05). Administrator는 업무를 맡지 않는다. |
+| 배정 규칙 (BR-02, BR-03) | 정지·탈퇴 구성원은 409 BR-02, 대기 구성원은 409 CONFLICT. 같은 구성원의 끝나지 않은 업무(계획·진행·보류)끼리 시간이 겹치면 409 BR-03 (겹침: 새 시작 < 기존 종료 AND 기존 시작 < 새 종료, 맞닿은 시간은 허용). 같은 구성원의 배정 변경은 구성원 행 잠금으로 한 줄로 세운다. 날짜·시간은 초 단위로 저장·비교한다. |
+| 완료 업무 잠금 (BR-06) | 완료하면 업무 내용·배정·체크리스트·결과(성과·요약)·참여 기록이 잠긴다. 일반 구성원(Associate·Soldier·Capo)이 바꾸려 하면 409 BR-06. 결과·참여 기록 정정은 Underboss·Boss만 사유를 남기고 할 수 있고, 변경 전후가 정정 이력에 남는다. |
+| 자원 상태 | 사용가능, 사용중, 점검중, 사용불가. 점검중·사용불가는 새로 배정 불가 (409 BR-08). 사용중은 사용 시작·반환으로만 바뀌고, 상태 변경 API는 사용가능·점검중·사용불가 사이만 바꾼다. 진행 중인 점검은 점검 완료(정상 복구 → 사용가능, 수리 불가 → 사용불가)로 끝낸다. |
+| 자원 이용 권한 | 자원마다 이용 최소 역할(기본 Soldier)이 있다. 이용 가능 자원 조회·사용 신청·구성원 배정은 이 역할 이상만 된다. 업무에 할당된 자원은 그 업무의 참여자가 역할과 관계없이 쓴다. 자원 상태·점검·이력 관리는 Capo 이상, 자원 등록·정보·이용 권한 변경은 Underboss·Boss가 한다. Capo는 자기 Crew의 업무와 소속원에게만 자원을 할당·배정하고 그 신청을 처리한다 (BR-05). |
+| 자원 배정 규칙 (BR-07) | 같은 자원의 진행 중 예약(끝나지 않은 업무의 할당, 구성원 배정, 반환되지 않은 사용)과 시간이 겹치면 409 BR-07 (겹침 조건은 BR-03과 같고 맞닿은 시간은 허용). 반환 예정 시각이 지난 미반환 자원은 반환될 때까지 사용 중으로 본다. 같은 자원의 예약 변경은 자원 행 잠금으로 한 줄로 세운다. 업무 일정이 바뀌면 할당 시간대를 함께 옮기고 다시 검사한다. |
+| 자원 사용·반환 | 사용은 지금이 시간대 안에 있는 구성원 배정 또는 내가 참여 중인 업무의 할당이 있을 때만 시작한다. 반환 상태가 손상이면 점검을 자동으로 열어 점검중, 분실이면 사용불가가 된다. 구성원 배정으로 쓴 자원은 반환하면 배정도 끝난다. 사용 중 고장 신고는 점검을 열고, 인계는 반환과 사용 시작을 한 트랜잭션으로 처리한다. |
 | Crew 관리 범위 | Crew마다 Capo 1명, 담당 Underboss 1명. Underboss는 여러 Crew를 담당한다. 책임자(Capo)는 그 Crew의 정식 소속원이다. Underboss·Boss는 모든 Crew를 관리하고, Capo는 자신이 책임자인 Crew만 관리한다 (BR-05). |
 
 ### 권한 표기
@@ -200,7 +206,7 @@
 | 75 | POST | `/api/tasks/:taskId/checklist` | 체크리스트 항목 추가 | FR-07 | 담당 C, U+ | 3 |
 | 76 | GET | `/api/tasks/:taskId/checklist` | 체크리스트와 완료 현황 | FR-09, FR-10 | 참여자, 담당 C, U+ | 3 |
 | 77 | PATCH | `/api/tasks/:taskId/checklist/:itemId` | 항목 내용 수정 | FR-07 | 담당 C, U+ | 3 |
-| 78 | POST | `/api/tasks/:taskId/checklist/:itemId/check` | 항목 완료 표시 (수행자·시각 기록) | FR-10 | 참여자 | 3 |
+| 78 | POST | `/api/tasks/:taskId/checklist/:itemId/check` | 항목 완료 표시 (수행자·시각 기록) | FR-10 | 참여자, 담당 C, U+ | 3 |
 | 79 | DELETE | `/api/tasks/:taskId/checklist/:itemId` | 항목 삭제 | FR-07 | 담당 C, U+ | 3 |
 | 80 | POST | `/api/tasks/:taskId/dependencies` | 선행 업무 지정 (순환 참조 방지) | FR-07 | 담당 C, U+ | 3 |
 | 81 | GET | `/api/tasks/:taskId/dependencies` | 선행·후행 업무 목록 | FR-07 | 참여자, 담당 C, U+ | 3 |
@@ -237,7 +243,7 @@
 | 97 | POST | `/api/tasks/:taskId/swap-requests` | 내 배정을 다른 구성원에게 넘기는 교대 요청 | FR-08, BR-02, BR-03 | 참여자 | 3 |
 | 98 | GET | `/api/swap-requests` | 교대 요청 목록 (보낸 요청, 받은 요청, 승인 대기) | FR-08 | 로그인 | 3 |
 | 99 | POST | `/api/swap-requests/:requestId/approve` | 승인 후 배정 교체 (BR-02, BR-03 재검증) | FR-08, BR-02, BR-03 | 담당 C, U+ | 3 |
-| 100 | POST | `/api/swap-requests/:requestId/reject` | 거절 | FR-08 | 대상자, 담당 C | 3 |
+| 100 | POST | `/api/swap-requests/:requestId/reject` | 거절 | FR-08 | 대상자, 담당 C, U+ | 3 |
 | 101 | DELETE | `/api/swap-requests/:requestId` | 요청 취소 | FR-08 | 요청자 | 3 |
 
 ### 6.7 업무 진행·완료·결과
@@ -246,7 +252,7 @@
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
 | 102 | POST | `/api/tasks/:taskId/complete` | 완료 처리. 결과를 기록하고 핵심 결과를 잠금 | FR-10, FR-11, BR-06 | 담당 C, U+ | 3 |
 | 103 | GET | `/api/tasks/:taskId/result` | 완료 결과 조회 | FR-11 | 참여자, 담당 C, U+ | 3 |
-| 104 | PATCH | `/api/tasks/:taskId/result` | 결과 정정 (사유 필수, 정정 이력 저장). 일반 구성원 불가 | FR-11, BR-06 | U+ | 3 |
+| 104 | PATCH | `/api/tasks/:taskId/result` | 결과 정정 (사유 필수, 정정 이력 저장). 참여자·담당 C 등 일반 구성원이 시도하면 409 BR-06 | FR-11, BR-06 | U+ | 3 |
 | 105 | PUT | `/api/tasks/:taskId/participations/:userId` | 참여자별 참여 기록 (실제 참여 여부, 기여 내용) | FR-11 | 담당 C, U+ | 3 |
 | 106 | GET | `/api/tasks/:taskId/participations` | 참여 기록 목록 | FR-11 | 참여자, 담당 C, U+ | 3 |
 | 107 | POST | `/api/tasks/:taskId/progress` | 진행 보고 (진척률, 메모) | FR-10 | 참여자 | 3 |
@@ -319,7 +325,7 @@
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
 | 141 | POST | `/api/resource-requests` | 자원 사용 신청 (자원, 시간대, 사유) | FR-14, FR-17 | S+ | 4 |
 | 142 | GET | `/api/resource-requests` | 신청 목록 (내 신청, 승인 대기) | FR-17 | S+ | 4 |
-| 143 | GET | `/api/resource-requests/:requestId` | 신청 상세 | FR-17 | 신청자, C+ | 4 |
+| 143 | GET | `/api/resource-requests/:requestId` | 신청 상세 | FR-17 | 신청자, 담당 C, U+ | 4 |
 | 144 | POST | `/api/resource-requests/:requestId/approve` | 승인 후 구성원 배정 생성 (BR-07, BR-08 재검증) | FR-17, BR-07, BR-08 | 담당 C, U+ | 4 |
 | 145 | POST | `/api/resource-requests/:requestId/reject` | 거절 (사유 기록) | FR-17 | 담당 C, U+ | 4 |
 | 146 | DELETE | `/api/resource-requests/:requestId` | 신청 취소 | FR-17 | 신청자 | 4 |
@@ -329,7 +335,7 @@
 | # | Method | URL | 기능 | 요구사항 | 권한 | 단계 |
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
 | 147 | POST | `/api/resources/:resourceId/checkout` | 사용 시작. 유효한 배정이 있어야 하며 상태를 사용중으로 전환 | FR-15 | 배정받은 구성원 | 4 |
-| 148 | POST | `/api/resources/:resourceId/return` | 반환. 반환 상태를 기록하고 손상 시 점검중으로 전환 | FR-15, FR-16 | 사용자, C+ | 4 |
+| 148 | POST | `/api/resources/:resourceId/return` | 반환. 반환 상태를 기록하고 손상 시 점검중으로 전환 | FR-15, FR-16 | 사용자, 담당 C, U+ | 4 |
 | 149 | POST | `/api/tasks/:taskId/resources/return` | 업무에 할당된 자원 일괄 반환 | FR-15 | 담당 C, U+ | 4 |
 | 150 | GET | `/api/resources/:resourceId/usages` | 자원별 사용·반환 이력 | FR-15, DR-03 | C+ | 4 |
 | 151 | PATCH | `/api/resource-usages/:usageId` | 반환 예정 시각 연장 (BR-07 재검증) | FR-15, BR-07 | 담당 C, U+ | 4 |
@@ -452,6 +458,12 @@
 | `/crews` | Crew 목록(필터·정렬·페이지), Crew 생성 | FR-05, FR-21 | 2 |
 | `/crews/:crewId` | Crew 상세: 조직도, 소속원, 편성·제외·유형 변경·이동, 소속 신청과 승인·거절, 책임자·Underboss 지정, 해산·병합·삭제, 편성·책임자 이력 | FR-05, FR-06, BR-01, BR-05, BR-10 | 2 |
 | `/role-requests` | 역할 변경 요청 목록과 승인·거절 | FR-03, BR-04 | 2 |
+| `/tasks` | 업무 목록(상태·중요도·Crew 필터, 정렬, 페이지), 업무 등록 | FR-07, FR-12 | 3 |
+| `/tasks/:taskId` | 업무 상세: 시작·보류, 참여자 배정·역할·해제·교체·응답, 교대 요청, 할당 자원(할당·시간 조정·해제·사용 시작·일괄 반환, 단계 4), 지시사항, 체크리스트, 선행 업무, 진행 보고, 완료 처리·결과 정정, 참여 기록, 정보·일정·필요 인원·필요 자원 변경, 복제·취소·삭제, 상태·배정 이력 | FR-07~FR-11, FR-17, BR-02, BR-03, BR-06, BR-07, BR-08 | 3, 4 |
+| `/my-tasks` | 내 업무 목록, 앞으로 2주 일정(배정된 자원 포함), 교대 요청(보낸·받은·승인할) 처리 | FR-08, FR-09 | 3 |
+| `/resources` | 이용 가능한 자원(시간대·분류), 관리용 전체 자원(상태·정상 여부·분류 필터, 정렬, 페이지), 진행 중인 점검, 미반환 자원, 자원 분류, 자원 등록 | FR-13, FR-14, FR-16, FR-21 | 4 |
+| `/resources/:resourceId` | 자원 상세: 현재 상태·사용자·점검, 사용 시작·반환·인계·고장 신고·반환 연장, 시간대 가용 여부, 구성원 배정·취소, 예약 일정, 사용·반환 이력, 점검 등록·완료, 상태 이력, 상태·이용 권한·정보 변경, 삭제 | FR-13~FR-17, BR-07, BR-08 | 4 |
+| `/my-resources` | 지금 사용 중인 자원과 반환, 나에게 배정된 자원과 사용 시작, 자원 사용 신청·취소, 처리할 사용 신청 승인·거절 | FR-14, FR-15, FR-17 | 4 |
 | `/dashboard` | 운영 현황 대시보드 (#185~#196 데이터 사용) | FR-22 | 6 |
 
 ## 11. 중복 위험 검토 (AR-07)
@@ -519,5 +531,9 @@
 ## 13. 구현 메모
 
 - 고정 경로는 파라미터 경로보다 먼저 등록한다. 예: `/users/check-username` → `/users/:userId`, `/resources/available` → `/resources/:resourceId`, `/evaluations/pending` → `/evaluations/:evaluationId`, `/resource-usages/overdue` → `/resource-usages/:usageId`.
-- #65 업무 일정 변경은 단계 3에서 구성원 시간 충돌 검증을, 단계 4에서 자원 시간 충돌 검증을 추가한다.
+- #65 업무 일정 변경은 단계 3에서 구성원 시간 충돌 검증을, 단계 4에서 자원 시간 충돌 검증을 추가했다.
 - 모든 상태 변경 API는 단계 1에서 만든 이력 기록 서비스를 처음부터 호출한다. #155·109·124·156·157 이력 조회 API의 데이터 원천이다.
+- 단계 3의 업무 API 가운데 자원과 연결된 부분은 단계 4에서 같은 API에 추가했다.
+  - #69·#70 필요 자원 분류, #92 필요 자원 충족 확인·할당 자원 상태, #93 취소 시 할당 자원 해제, #64 자원 사용 기록이 있는 업무 삭제 거부
+  - #95 할당 자원, #96 나에게 배정된 자원 일정, #65 할당 시간대 이동과 시간 충돌(BR-07) 검사
+- 단계 2의 구성원 탈퇴(#18)는 단계 4부터 끝나지 않은 구성원 자원 배정을 끝내고 대기 중인 자원 사용 신청을 취소한다.

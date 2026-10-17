@@ -2,7 +2,9 @@
 // 각 경로에는 같은 기능의 API와 똑같은 권한 키를 건다. 화면에서 버튼을 숨기는 것과 별개로 서버가 다시 검사한다 (NFR-03).
 const express = require('express');
 const web = require('../controllers/webController');
-const { webContext, requireLogin, webNotFound, webErrorHandler } = require('../middlewares/web');
+const webTask = require('../controllers/webTaskController');
+const webResource = require('../controllers/webResourceController');
+const { webContext, requireLogin, webNotFound, webErrorHandler, kstDatetimes } = require('../middlewares/web');
 const { requirePermission } = require('../middlewares/authorize');
 const { validate } = require('../middlewares/validate');
 const { paging, enums, fields } = require('./rules');
@@ -170,6 +172,282 @@ router.post(
   validate({ ...requestParams, form: { reason: fields.requiredReason } }),
   web.rejectRoleRequest,
 );
+
+// 업무 (FR-07~FR-12, BR-02, BR-03, BR-06)
+const taskParams = { params: { taskId: fields.id } };
+const taskUserParams = { params: { taskId: fields.id, userId: fields.id } };
+const schedule = kstDatetimes('startAt', 'endAt');
+const taskEditable = {
+  title: { ...fields.title, required: false }, description: { type: 'string', max: 2000 }, typeId: fields.optionalId,
+  priority: enums.taskPriority, location: { type: 'string', max: 100 },
+};
+
+router.get(
+  '/tasks',
+  ...allowed('task.list'),
+  validate({ query: { status: enums.taskStatus, crewId: fields.optionalId, priority: enums.taskPriority, q: fields.q, ...paging('tasks') } }),
+  webTask.tasksPage,
+);
+router.post(
+  '/tasks',
+  ...allowed('task.create'),
+  schedule,
+  validate({
+    form: {
+      ...taskEditable, title: fields.title, crewId: fields.optionalId, priority: { ...enums.taskPriority, default: 'MEDIUM' },
+      startAt: fields.datetime, endAt: fields.datetime, requiredHeadcount: fields.headcount,
+    },
+  }),
+  webTask.createTask,
+);
+router.get('/tasks/:taskId', ...allowed('task.read'), validate(taskParams), webTask.taskPage);
+router.post('/tasks/:taskId/edit', ...allowed('task.manage'), validate({ ...taskParams, form: taskEditable }), webTask.updateTask);
+router.post(
+  '/tasks/:taskId/schedule',
+  ...allowed('task.manage'),
+  schedule,
+  validate({ ...taskParams, form: { startAt: fields.datetime, endAt: fields.datetime, reason: fields.reason } }),
+  webTask.changeSchedule,
+);
+router.post(
+  '/tasks/:taskId/status',
+  ...allowed('task.manage'),
+  validate({ ...taskParams, form: { status: { type: 'string', required: true, enum: ['IN_PROGRESS', 'ON_HOLD'] }, reason: fields.reason } }),
+  webTask.changeStatus,
+);
+// 필요 자원 분류별 수량은 qty_<분류 ID> 칸으로 받는다 (컨트롤러에서 읽는다).
+router.post(
+  '/tasks/:taskId/requirements',
+  ...allowed('task.manage'),
+  validate({ ...taskParams, form: { requiredHeadcount: { ...fields.headcount, required: true }, leaderRequired: { type: 'boolean', default: false } } }),
+  webTask.setRequirements,
+);
+router.post(
+  '/tasks/:taskId/duplicate',
+  ...allowed('task.manage'),
+  schedule,
+  validate({ ...taskParams, form: { startAt: fields.datetime, endAt: fields.datetime, title: { ...fields.title, required: false } } }),
+  webTask.duplicateTask,
+);
+router.post('/tasks/:taskId/cancel', ...allowed('task.manage'), validate({ ...taskParams, form: { reason: fields.requiredReason } }), webTask.cancelTask);
+router.post('/tasks/:taskId/delete', ...allowed('task.manage'), validate(taskParams), webTask.deleteTask);
+
+router.post(
+  '/tasks/:taskId/assignees',
+  ...allowed('task.manage'),
+  validate({ ...taskParams, form: { usernames: { type: 'string', required: true, max: 500 }, role: { ...enums.assigneeRole, default: 'MEMBER' } } }),
+  webTask.assign,
+);
+router.post(
+  '/tasks/:taskId/assignees/:userId/role',
+  ...allowed('task.manage'),
+  validate({ ...taskUserParams, form: { role: { ...enums.assigneeRole, required: true } } }),
+  webTask.changeAssigneeRole,
+);
+router.post('/tasks/:taskId/assignees/:userId/remove', ...allowed('task.manage'), validate(taskUserParams), webTask.unassign);
+router.post(
+  '/tasks/:taskId/assignees/:userId/replace',
+  ...allowed('task.manage'),
+  validate({ ...taskUserParams, form: { username, reason: fields.reason } }),
+  webTask.replaceAssignee,
+);
+router.post(
+  '/tasks/:taskId/respond',
+  ...allowed('task.participate'),
+  validate({ ...taskParams, form: { response: { type: 'string', required: true, enum: ['ACCEPTED', 'DECLINED'] }, note: fields.reason } }),
+  webTask.respond,
+);
+
+router.post(
+  '/tasks/:taskId/notes',
+  ...allowed('task.manage'),
+  validate({ ...taskParams, form: { content: { type: 'string', required: true, max: 2000 }, target: { type: 'string', max: 50 } } }),
+  webTask.createNote,
+);
+router.post('/tasks/:taskId/notes/:noteId/delete', ...allowed('task.manage'), validate({ params: { taskId: fields.id, noteId: fields.id } }), webTask.deleteNote);
+router.post('/tasks/:taskId/checklist', ...allowed('task.manage'), validate({ ...taskParams, form: { content: { type: 'string', required: true, max: 300 } } }), webTask.addItem);
+router.post(
+  '/tasks/:taskId/checklist/:itemId/check',
+  ...allowed('task.participate'),
+  validate({ params: { taskId: fields.id, itemId: fields.id }, form: { done: { type: 'boolean', default: true } } }),
+  webTask.checkItem,
+);
+router.post('/tasks/:taskId/checklist/:itemId/delete', ...allowed('task.manage'), validate({ params: { taskId: fields.id, itemId: fields.id } }), webTask.removeItem);
+router.post('/tasks/:taskId/dependencies', ...allowed('task.manage'), validate({ ...taskParams, form: { dependsOnId: fields.id } }), webTask.addDependency);
+router.post(
+  '/tasks/:taskId/dependencies/:dependsOnId/delete',
+  ...allowed('task.manage'),
+  validate({ params: { taskId: fields.id, dependsOnId: fields.id } }),
+  webTask.removeDependency,
+);
+
+router.post(
+  '/tasks/:taskId/progress',
+  ...allowed('task.participate'),
+  validate({ ...taskParams, form: { percent: { type: 'integer', required: true, min: 0, max: 100 }, note: { type: 'string', max: 1000 } } }),
+  webTask.reportProgress,
+);
+router.post(
+  '/tasks/:taskId/complete',
+  ...allowed('task.manage'),
+  validate({ ...taskParams, form: { outcome: { ...enums.taskOutcome, required: true }, summary: { type: 'string', required: true, max: 2000 } } }),
+  webTask.complete,
+);
+router.post(
+  '/tasks/:taskId/result',
+  ...allowed('task.read'),
+  validate({ ...taskParams, form: { outcome: enums.taskOutcome, summary: { type: 'string', max: 2000 }, reason: fields.requiredReason } }),
+  webTask.correctResult,
+);
+router.post(
+  '/tasks/:taskId/participations/:userId',
+  ...allowed('task.manage'),
+  validate({ ...taskUserParams, form: { participated: { type: 'boolean', required: true }, contribution: { type: 'string', max: 1000 }, reason: fields.reason } }),
+  webTask.recordParticipation,
+);
+
+// 내 업무·교대 요청 (FR-08, FR-09)
+router.get('/my-tasks', ...allowed('me.read'), webTask.myTasksPage);
+router.post('/tasks/:taskId/swap', ...allowed('task.swap'), validate({ ...taskParams, form: { username, reason: fields.reason } }), webTask.requestSwap);
+router.post('/swap-requests/:requestId/approve', ...allowed('task.swap.review'), validate(requestParams), webTask.approveSwap);
+router.post('/swap-requests/:requestId/reject', ...allowed('task.swap'), validate({ ...requestParams, form: { reason: fields.reason } }), webTask.rejectSwap);
+router.post('/swap-requests/:requestId/cancel', ...allowed('task.swap'), validate(requestParams), webTask.cancelSwap);
+
+// 공용 자원 (FR-13~FR-17, BR-07, BR-08)
+const resourceParams = { params: { resourceId: fields.id } };
+const taskResourceParams = { params: { taskId: fields.id, resourceId: fields.id } };
+const localWindow = { from: { type: 'string', max: 20 }, to: { type: 'string', max: 20 } };
+const code = { type: 'string', required: true, max: 30 };
+const resourceTimes = kstDatetimes('startAt', 'endAt', 'expectedEndAt', 'dueAt');
+
+router.get(
+  '/resources',
+  ...allowed('resource.read'),
+  validate({
+    query: {
+      status: enums.resourceStatus, categoryId: fields.optionalId, assignable: { type: 'boolean' }, q: fields.q, ...localWindow, ...paging('resources'),
+    },
+  }),
+  webResource.resourcesPage,
+);
+router.post(
+  '/resources',
+  ...allowed('resource.manage'),
+  validate({
+    form: {
+      code: fields.resourceCode, name: fields.resourceName, categoryId: fields.id, location: { type: 'string', max: 100 },
+      description: { type: 'string', max: 1000 }, minRole: { ...enums.resourceMinRole, default: 'SOLDIER' },
+    },
+  }),
+  webResource.createResource,
+);
+router.post(
+  '/resource-categories',
+  ...allowed('resourceCategory.manage'),
+  validate({ form: { name: { type: 'string', required: true, max: 50 }, description: { type: 'string', max: 300 } } }),
+  webResource.createCategory,
+);
+router.post('/resource-categories/:categoryId/delete', ...allowed('resourceCategory.manage'), validate({ params: { categoryId: fields.id } }), webResource.deleteCategory);
+
+router.get('/resources/:resourceId', ...allowed('resource.read'), validate({ ...resourceParams, query: localWindow }), webResource.resourcePage);
+router.post(
+  '/resources/:resourceId/edit',
+  ...allowed('resource.manage'),
+  validate({ ...resourceParams, form: { name: { ...fields.resourceName, required: false }, categoryId: fields.optionalId, location: { type: 'string', max: 100 }, description: { type: 'string', max: 1000 } } }),
+  webResource.updateResource,
+);
+router.post(
+  '/resources/:resourceId/status',
+  ...allowed('resource.operate'),
+  validate({ ...resourceParams, form: { status: { ...enums.manualResourceStatus, required: true }, reason: fields.requiredReason } }),
+  webResource.changeStatus,
+);
+router.post(
+  '/resources/:resourceId/access-level',
+  ...allowed('resource.manage'),
+  validate({ ...resourceParams, form: { minRole: { ...enums.resourceMinRole, required: true }, reason: fields.reason } }),
+  webResource.changeAccessLevel,
+);
+router.post('/resources/:resourceId/delete', ...allowed('resource.manage'), validate(resourceParams), webResource.deleteResource);
+router.post(
+  '/resources/:resourceId/maintenances',
+  ...allowed('resource.operate'),
+  resourceTimes,
+  validate({ ...resourceParams, form: { reason: fields.requiredReason, expectedEndAt: fields.optionalDatetime } }),
+  webResource.createMaintenance,
+);
+router.post(
+  '/resources/:resourceId/maintenances/:maintenanceId/complete',
+  ...allowed('resource.operate'),
+  validate({ params: { resourceId: fields.id, maintenanceId: fields.id }, form: { result: { ...enums.maintenanceResult, required: true }, note: fields.reason } }),
+  webResource.completeMaintenance,
+);
+router.post(
+  '/resources/:resourceId/allocations',
+  ...allowed('resource.allocate'),
+  resourceTimes,
+  validate({ ...resourceParams, form: { username, startAt: fields.datetime, endAt: fields.datetime, purpose: fields.reason } }),
+  webResource.allocateToMember,
+);
+router.post('/resource-allocations/:allocationId/cancel', ...allowed('resource.allocate'), validate({ params: { allocationId: fields.id } }), webResource.cancelAllocation);
+
+router.post('/resources/:resourceId/checkout', ...allowed('resource.use'), validate({ ...resourceParams, form: { taskId: fields.optionalId } }), webResource.checkout);
+router.post(
+  '/resources/:resourceId/return',
+  ...allowed('resource.use'),
+  validate({ ...resourceParams, form: { condition: { ...enums.returnCondition, default: 'GOOD' }, note: fields.reason } }),
+  webResource.returnResource,
+);
+router.post(
+  '/resource-usages/:usageId/extend',
+  ...allowed('resource.allocate'),
+  resourceTimes,
+  validate({ params: { usageId: fields.id }, form: { dueAt: fields.datetime, reason: fields.reason } }),
+  webResource.extendUsage,
+);
+router.post(
+  '/resource-usages/:usageId/handover',
+  ...allowed('resource.use'),
+  resourceTimes,
+  validate({ params: { usageId: fields.id }, form: { username, dueAt: fields.optionalDatetime, note: fields.reason } }),
+  webResource.handover,
+);
+router.post(
+  '/resource-usages/:usageId/damage',
+  ...allowed('resource.use'),
+  validate({ params: { usageId: fields.id }, form: { description: fields.requiredReason } }),
+  webResource.reportDamage,
+);
+
+router.get('/my-resources', ...allowed('resource.use'), webResource.myResourcesPage);
+router.post(
+  '/resource-requests',
+  ...allowed('resource.request'),
+  resourceTimes,
+  validate({ form: { code, startAt: fields.datetime, endAt: fields.datetime, reason: fields.requiredReason } }),
+  webResource.createRequest,
+);
+router.post('/resource-requests/:requestId/approve', ...allowed('resource.request.review'), validate({ ...requestParams, form: { note: fields.reason } }), webResource.approveRequest);
+router.post('/resource-requests/:requestId/reject', ...allowed('resource.request.review'), validate({ ...requestParams, form: { reason: fields.requiredReason } }), webResource.rejectRequest);
+router.post('/resource-requests/:requestId/cancel', ...allowed('resource.request'), validate(requestParams), webResource.cancelRequest);
+
+// 업무 자원 할당 (업무 화면)
+router.post(
+  '/tasks/:taskId/resources',
+  ...allowed('task.manage'),
+  resourceTimes,
+  validate({ ...taskParams, form: { code, startAt: fields.optionalDatetime, endAt: fields.optionalDatetime, note: fields.note } }),
+  webResource.allocateToTask,
+);
+router.post('/tasks/:taskId/resources/return', ...allowed('task.manage'), validate({ ...taskParams, form: { note: fields.reason } }), webResource.returnTaskResources);
+router.post(
+  '/tasks/:taskId/resources/:resourceId/edit',
+  ...allowed('task.manage'),
+  resourceTimes,
+  validate({ ...taskResourceParams, form: { startAt: fields.optionalDatetime, endAt: fields.optionalDatetime } }),
+  webResource.adjustTaskResource,
+);
+router.post('/tasks/:taskId/resources/:resourceId/remove', ...allowed('task.manage'), validate(taskResourceParams), webResource.releaseTaskResource);
 
 router.use(webNotFound);
 router.use(webErrorHandler);

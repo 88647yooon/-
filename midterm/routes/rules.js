@@ -1,6 +1,8 @@
 // 라우터의 입력 검증 규칙과 Swagger 문서가 함께 쓰는 정의. 둘이 어긋나지 않도록 한 곳에 둔다.
 const {
   ALL_ROLES, MEMBER_STATUS_INFO, CREW_STATUS_INFO, MEMBERSHIP_TYPE_INFO, REQUEST_STATUS_INFO, CREW_MEMBER_ROLES,
+  TASK_STATUS_INFO, TASK_PRIORITY_INFO, ASSIGNEE_ROLE_INFO, ASSIGNMENT_RESPONSE_INFO, TASK_OUTCOME_INFO, ASSIGNABLE_ROLES,
+  RESOURCE_STATUS_INFO, MANUAL_RESOURCE_STATUSES, RESOURCE_MIN_ROLES, MAINTENANCE_SOURCE_INFO, MAINTENANCE_RESULT_INFO, RETURN_CONDITION_INFO,
 } = require('../config/constants');
 const { pagingRules } = require('../utils/pagination');
 const { idParam } = require('../middlewares/validate');
@@ -12,6 +14,11 @@ const SORTS = {
   crews: { keys: ['name', 'region', 'createdAt', 'memberCount'], default: 'name' },
   members: { keys: ['name', 'joinedAt', 'rank'], default: '-rank' },
   candidates: { keys: ['name', 'rank'], default: 'name' },
+  tasks: { keys: ['startAt', 'priority', 'createdAt', 'title'], default: 'startAt' },
+  myTasks: { keys: ['startAt', 'assignedAt'], default: 'startAt' },
+  resources: { keys: ['code', 'name', 'status', 'location', 'createdAt'], default: 'code' },
+  allocations: { keys: ['startAt', 'allocatedAt'], default: 'startAt' },
+  usages: { keys: ['startedAt', 'dueAt', 'returnedAt'], default: '-startedAt' },
 };
 
 const paging = (sortName) => (sortName ? pagingRules(SORTS[sortName].keys, SORTS[sortName].default) : pagingRules());
@@ -23,6 +30,20 @@ const enums = {
   crewStatus: { type: 'string', enum: Object.keys(CREW_STATUS_INFO) },
   membershipType: { type: 'string', enum: Object.keys(MEMBERSHIP_TYPE_INFO) },
   requestStatus: { type: 'string', enum: Object.keys(REQUEST_STATUS_INFO) },
+  taskStatus: { type: 'string', enum: Object.keys(TASK_STATUS_INFO) },
+  taskPriority: { type: 'string', enum: Object.keys(TASK_PRIORITY_INFO) },
+  assigneeRole: { type: 'string', enum: Object.keys(ASSIGNEE_ROLE_INFO) },
+  assignmentResponse: { type: 'string', enum: Object.keys(ASSIGNMENT_RESPONSE_INFO) },
+  taskOutcome: { type: 'string', enum: Object.keys(TASK_OUTCOME_INFO) },
+  assignableRole: { type: 'string', enum: [...ASSIGNABLE_ROLES] },
+  swapBox: { type: 'string', enum: ['sent', 'received', 'review'] },
+  resourceStatus: { type: 'string', enum: Object.keys(RESOURCE_STATUS_INFO) },
+  manualResourceStatus: { type: 'string', enum: [...MANUAL_RESOURCE_STATUSES] },
+  resourceMinRole: { type: 'string', enum: [...RESOURCE_MIN_ROLES] },
+  maintenanceSource: { type: 'string', enum: Object.keys(MAINTENANCE_SOURCE_INFO) },
+  maintenanceResult: { type: 'string', enum: Object.keys(MAINTENANCE_RESULT_INFO) },
+  returnCondition: { type: 'string', enum: Object.keys(RETURN_CONDITION_INFO) },
+  requestBox: { type: 'string', enum: ['mine', 'review'] },
 };
 
 const fields = {
@@ -44,6 +65,18 @@ const fields = {
   q: { type: 'string', max: 50 },
   id: idParam,
   optionalId: { type: 'integer', min: 1 },
+  title: { type: 'string', required: true, min: 1, max: 100 },
+  longText: { type: 'string', nullable: true, max: 2000 },
+  location: { type: 'string', nullable: true, max: 100 },
+  datetime: { type: 'datetime', required: true },
+  optionalDatetime: { type: 'datetime' },
+  headcount: { type: 'integer', min: 1, max: 100 },
+  resourceCode: {
+    type: 'string', required: true, pattern: /^[A-Za-z0-9][A-Za-z0-9._-]{0,29}$/,
+    patternMessage: '영문자·숫자로 시작하고 영문자, 숫자, 마침표(.), 밑줄(_), 하이픈(-)으로 1~30자여야 합니다.',
+  },
+  resourceName: { type: 'string', required: true, min: 1, max: 100 },
+  resourceDescription: { type: 'string', nullable: true, max: 1000 },
 };
 
 module.exports = { SORTS, paging, enums, fields };

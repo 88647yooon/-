@@ -8,6 +8,10 @@ const membershipModel = require('../models/sql/membershipModel');
 const sessionModel = require('../models/sql/sessionModel');
 const joinRequestModel = require('../models/sql/joinRequestModel');
 const roleRequestModel = require('../models/sql/roleRequestModel');
+const taskAssigneeModel = require('../models/sql/taskAssigneeModel');
+const swapRequestModel = require('../models/sql/swapRequestModel');
+const allocationModel = require('../models/sql/resourceAllocationModel');
+const resourceRequestModel = require('../models/sql/resourceRequestModel');
 const auditService = require('./auditService');
 const access = require('./accessService');
 const { requireUser } = require('./lookup');
@@ -193,9 +197,9 @@ async function changeRole(actor, userId, { role, reason }, ctx) {
   return get(actor, userId);
 }
 
-// #18 상태 변경 (FR-03, FR-04). 탈퇴하면 모든 Crew 소속과 대기 중인 신청·요청을 정리한다.
+// #18 상태 변경 (FR-03, FR-04). 탈퇴하면 모든 Crew 소속, 끝나지 않은 업무 배정·자원 배정, 대기 중인 신청·요청을 정리한다.
 async function changeStatus(actor, userId, { status, reason }, ctx) {
-  const { target, ended } = await withTransaction(async (conn) => {
+  const { target, ended, releasedTasks, releasedResources } = await withTransaction(async (conn) => {
     const user = await requireUser(userId, conn, { forUpdate: true });
     await access.assertCanManageUser(actor, user, { db: conn });
 
@@ -207,6 +211,8 @@ async function changeStatus(actor, userId, { status, reason }, ctx) {
     }
 
     let memberships = [];
+    let assignments = [];
+    let allocations = [];
     if (status === 'WITHDRAWN') {
       const capoOf = await crewModel.findByCapo(userId, conn);
       if (capoOf) throw conflict(`'${capoOf.name}' Crew의 책임자는 탈퇴 처리할 수 없습니다. 먼저 책임자를 해제하세요.`, { crewId: capoOf.id });
@@ -217,6 +223,10 @@ async function changeStatus(actor, userId, { status, reason }, ctx) {
       for (const m of memberships) await membershipModel.end(m.id, { reason: 'WITHDRAWN', endedBy: actor.id }, conn);
       await joinRequestModel.cancelPending({ userId }, { reason: '구성원 탈퇴', decidedBy: actor.id }, conn);
       await roleRequestModel.rejectPendingByUser(userId, { reason: '대상 구성원 탈퇴', decidedBy: actor.id }, conn);
+      assignments = await taskAssigneeModel.releaseOpenByUser(userId, { reason: 'WITHDRAWN', releasedBy: actor.id }, conn);
+      await swapRequestModel.cancelPending({ userId }, { reason: '구성원 탈퇴', decidedBy: actor.id }, conn);
+      allocations = await allocationModel.releaseOpenByUser(userId, { reason: 'WITHDRAWN', releasedBy: actor.id }, conn);
+      await resourceRequestModel.cancelPendingByUser(userId, { reason: '구성원 탈퇴', decidedBy: actor.id }, conn);
     }
 
     await userModel.updateStatus(userId, status, conn);
@@ -224,15 +234,25 @@ async function changeStatus(actor, userId, { status, reason }, ctx) {
     if (SIGN_IN_BLOCKED_STATUSES.includes(status)) {
       await sessionModel.revokeAllForUser(userId, `STATUS_${status}`, {}, conn);
     }
-    return { target: user, ended: memberships };
+    return { target: user, ended: memberships, releasedTasks: assignments, releasedResources: allocations };
   });
 
-  const refs = await loadRefs({ crewIds: ended.map((m) => m.crewId) });
+  const refs = await loadRefs({
+    crewIds: ended.map((m) => m.crewId), taskIds: releasedTasks.map((a) => a.taskId), resourceIds: releasedResources.map((a) => a.resourceId),
+  });
   await auditService.recordMany([
     { actor, action: 'USER_STATUS_CHANGED', target: userTarget(target), before: { status: target.status }, after: { status }, reason, ip: ctx.ip },
     ...ended.map((m) => ({
       actor, action: 'MEMBERSHIP_ENDED', target: userTarget(target), related: [crewTarget(refs.crews.get(m.crewId))],
       before: { crewId: m.crewId, type: m.type }, after: { endReason: 'WITHDRAWN' }, ip: ctx.ip,
+    })),
+    ...releasedTasks.map((a) => ({
+      actor, action: 'ASSIGNEE_REMOVED', target: auditService.taskTarget(refs.tasks.get(a.taskId)), related: [userTarget(target)],
+      before: { userId: target.id, role: a.role }, after: { releaseReason: 'WITHDRAWN' }, ip: ctx.ip,
+    })),
+    ...releasedResources.map((a) => ({
+      actor, action: 'RESOURCE_ALLOCATION_CANCELLED', target: auditService.resourceTarget(refs.resources.get(a.resourceId)), related: [userTarget(target)],
+      before: { allocationId: a.id, startAt: a.startAt, endAt: a.endAt }, after: { releaseReason: 'WITHDRAWN' }, ip: ctx.ip,
     })),
   ]);
   return get(actor, userId);
