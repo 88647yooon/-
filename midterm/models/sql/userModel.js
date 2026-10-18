@@ -122,6 +122,35 @@ async function remove(id, db = getPool()) {
   await db.query('DELETE FROM users WHERE id = ?', [id]);
 }
 
+// 계정 잠금·해제 (FR-23). 해제하면 로그인 실패 횟수도 0으로 되돌린다.
+async function lock(id, reason, db = getPool()) {
+  await db.query('UPDATE users SET locked_at = NOW(), locked_reason = ? WHERE id = ?', [reason, id]);
+}
+
+async function unlock(id, db = getPool()) {
+  await db.query('UPDATE users SET locked_at = NULL, locked_reason = NULL, failed_login_count = 0 WHERE id = ?', [id]);
+}
+
+const ACCOUNT_SORT = { username: 'u.username', lastLoginAt: 'u.last_login_at', failedLoginCount: 'u.failed_login_count', createdAt: 'u.created_at' };
+
+// #199 계정 보안 현황 (잠금 여부, 실패 횟수, 마지막 로그인으로 거른다)
+async function searchAccounts({ locked, role, status, q, minFailed, sort = 'username', ...paging }, db = getPool()) {
+  const w = where([
+    locked === true && ['u.locked_at IS NOT NULL'],
+    locked === false && ['u.locked_at IS NULL'],
+    role && ['u.role = ?', role],
+    status && ['u.status = ?', status],
+    minFailed !== undefined && ['u.failed_login_count >= ?', minFailed],
+    q && ['(u.name LIKE ? OR u.username LIKE ?)', like(q), like(q)],
+  ]);
+  const [rows] = await db.query(
+    `SELECT ${U_COLUMNS} FROM users u ${w.sql} ${orderBy(sort, ACCOUNT_SORT, 'u.id')} LIMIT ? OFFSET ?`,
+    [...w.params, ...limitOffset(paging)],
+  );
+  const [[{ total }]] = await db.query(`SELECT COUNT(*) AS total FROM users u ${w.sql}`, w.params);
+  return { rows: rows.map(toUser), total };
+}
+
 // 삭제 가능 여부 판단용. 하나라도 0이 아니면 활동 기록이 있는 구성원이다.
 async function activitySummary(id, db = getPool()) {
   const [[row]] = await db.query(
@@ -226,6 +255,9 @@ module.exports = {
   recordLoginSuccess,
   recordLoginFailure,
   remove,
+  lock,
+  unlock,
+  searchAccounts,
   activitySummary,
   search,
   searchCandidates,

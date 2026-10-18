@@ -75,4 +75,32 @@ module.exports = Object.freeze({
   'resource.request': { roles: SOLDIER_UP, description: '자원 사용 신청·조회·취소' },
   'resource.request.review': { roles: CAPO_UP, description: '자원 사용 신청 승인·거절 (Capo는 자기 Crew 소속원의 신청만)' },
   'resource.use': { roles: OPERATORS, description: '배정받은 자원 사용 시작·반환·인계·고장 신고' },
+
+  // 단계 5: 이력·평가·평판·감사 기록 (본인·담당 Capo 같은 범위는 서비스 계층에서 검사한다)
+  'member.history.read': { roles: OPERATORS, description: '구성원 변경 이력·활동 타임라인 조회 (본인, 소속 Crew의 책임자, Underboss·Boss)' },
+  'crew.activity.read': { roles: CAPO_UP, description: 'Crew 활동 타임라인 조회 (Capo는 자신이 책임자인 Crew만)' },
+  'evaluationCriteria.read': { roles: ALL_ROLES, description: '평가 항목 조회' },
+  'evaluationCriteria.manage': { roles: ['BOSS', 'ADMIN'], description: '평가 항목·가중치 설정' },
+  'evaluation.write': { roles: CAPO_UP, description: '완료 업무 참여자 평가 작성·수정, 업무별 평가·작성할 평가 조회 (Capo는 자기 Crew 업무만)' },
+  'evaluation.read': { roles: OPERATORS, description: '평가 상세·받은 평가 조회 (대상자, 평가자, 담당 Capo, Underboss·Boss)' },
+  'evaluation.search': { roles: UNDERBOSS_UP, description: '평가 검색' },
+  'evaluation.withdraw': { roles: UNDERBOSS_UP, description: '평가 철회' },
+  'evaluation.appeal': { roles: OPERATORS, description: '받은 평가에 이의 제기, 이의 제기 목록 조회' },
+  'evaluation.appeal.resolve': { roles: UNDERBOSS_UP, description: '이의 제기 처리 (기각 또는 평가 정정)' },
+  'reputation.read': { roles: OPERATORS, description: '평판 요약·공로·징계 기록 조회 (본인, 소속 Crew의 책임자, Underboss·Boss)' },
+  'reputation.record': { roles: UNDERBOSS_UP, description: '업무 밖 공로·징계 기록과 취소' },
+  'reputation.ranking': { roles: UNDERBOSS_UP, description: '평판 순위 조회' },
+  'audit.read': { roles: ['BOSS', 'ADMIN'], description: '관리 활동·중요 상태 변경 기록 검색·상세' },
+  'audit.export': { roles: ['ADMIN'], description: '감사 기록 CSV 내보내기' },
+  'security.read': { roles: ['ADMIN'], description: '권한 거부(403) 접근 시도 기록 조회' },
+
+  // 단계 6: 검색·통계·관리자
+  'search.use': { roles: ALL_ROLES, description: '통합 검색과 검색 조건 저장 (결과는 종류마다 각자의 권한 범위 안에서만)' },
+  'stats.read': { roles: UNDERBOSS_UP, description: '운영 현황 통계와 운영 경고 조회' },
+  'stats.adminActivity': { roles: ['BOSS', 'ADMIN'], description: '관리 활동 건수 통계 조회' },
+  'crew.workload.read': { roles: CAPO_UP, description: 'Crew 구성원별 업무량 조회 (Capo는 자신이 책임자인 Crew만)' },
+  'admin.accounts': { roles: ['ADMIN'], description: '계정 보안 현황, 계정 잠금·해제, 임시 비밀번호 발급, 강제 로그아웃, 로그인 이력' },
+  'admin.permissions': { roles: ['ADMIN'], description: '역할별 권한 조회·수정' },
+  'admin.settings': { roles: ['ADMIN'], description: '운영 설정 조회·변경' },
+  'admin.system': { roles: ['ADMIN'], description: '데이터 무결성 점검, DB 연결 상태 조회' },
 });

@@ -1,0 +1,80 @@
+<%- include('partials/head') %>
+<% const e = evaluation; %>
+<h1>평가 <span class="badge"><%= e.statusLabel %></span></h1>
+<p class="muted"><a href="/tasks/<%= e.task.id %>"><%= e.task.title %></a> · 대상자 <a href="/users/<%= e.evaluatee.id %>"><%= e.evaluatee.name %></a>
+  · 평가자 <%= e.evaluator.name %> · <%= fmt(e.createdAt) %></p>
+
+<div class="cols">
+  <section class="card">
+    <h2>점수 <span class="tag">FR-18</span></h2>
+    <table>
+      <thead><tr><th>항목</th><th>가중치</th><th>점수</th></tr></thead>
+      <tbody>
+        <% e.scores.forEach((s) => { %><tr><td><%= s.label %></td><td><%= s.weight %></td><td><strong><%= s.score %></strong> / 5</td></tr><% }) %>
+      </tbody>
+    </table>
+    <p>총점 <strong><%= e.totalScore %></strong> (가중 평균)</p>
+    <p><%= e.comment || '' %></p>
+    <% if (e.status === 'WITHDRAWN') { %>
+      <p class="denied">철회됨: <%= e.withdrawReason %> — <%= e.withdrawnBy ? e.withdrawnBy.name : '' %>, <%= fmt(e.withdrawnAt) %></p>
+    <% } else { %>
+      <p class="hint">평가자는 <%= fmt(e.editableUntil) %>까지 고칠 수 있습니다.</p>
+    <% } %>
+  </section>
+
+  <section class="card">
+    <h2>수정·정정 이력 <span class="tag">BR-10</span></h2>
+    <% if (e.revisions.length) { %>
+      <ul>
+        <% e.revisions.forEach((r) => { %>
+          <li><span class="badge"><%= r.kindLabel %></span> <%= fmt(r.at) %> · <%= r.by ? r.by.name : '' %>
+            · <%= r.before.totalScore %>점 → <strong><%= r.after.totalScore %>점</strong><%= r.reason ? ' · ' + r.reason : '' %>
+            <br><span class="small muted"><%= r.before.scores.map((s) => `${s.label} ${s.score}`).join(', ') %> → <%= r.after.scores.map((s) => `${s.label} ${s.score}`).join(', ') %></span></li>
+        <% }) %>
+      </ul>
+    <% } else { %><p class="muted">수정·정정한 적이 없습니다.</p><% } %>
+
+    <h3>이의 제기</h3>
+    <% if (e.appeals.length) { %>
+      <ul>
+        <% e.appeals.forEach((a) => { %>
+          <li><span class="badge"><%= a.statusLabel %></span> <%= a.reason %> <span class="muted small">— <%= fmt(a.createdAt) %></span>
+            <% if (a.resolutionNote) { %><br><span class="small">처리: <%= a.resolvedBy ? a.resolvedBy.name : '' %> · <%= a.resolutionNote %></span><% } %></li>
+        <% }) %>
+      </ul>
+    <% } else { %><p class="muted">이의 제기가 없습니다.</p><% } %>
+  </section>
+</div>
+
+<% if (e.status === 'ACTIVE') { %>
+  <section class="card">
+    <h2>처리 <span class="tag">FR-18 · BR-10</span></h2>
+    <div class="forms">
+      <% if (e.editable) { %>
+        <form method="post" action="/evaluations/<%= e.id %>/edit">
+          <h3>평가 수정 (평가자)</h3>
+          <div class="form-row">
+            <% e.scores.forEach((s) => { %><label><%= s.label %> <input name="score_<%= s.key %>" type="number" min="1" max="5" value="<%= s.score %>" size="2"></label><% }) %>
+          </div>
+          <div class="form-row"><input name="comment" maxlength="1000" value="<%= e.comment || '' %>" size="30"><input name="reason" maxlength="500" placeholder="수정 사유"></div>
+          <button>수정</button>
+        </form>
+      <% } %>
+      <% if (e.evaluatee.id === me.id) { %>
+        <form method="post" action="/evaluations/<%= e.id %>/appeals">
+          <h3>이의 제기 (대상자)</h3>
+          <input name="reason" required maxlength="500" placeholder="이의 내용" size="34"> <button class="ghost">이의 제기</button>
+          <p class="hint">Underboss·Boss가 기각하거나 평가를 정정합니다. 처리 대기 중인 이의가 있으면 새로 낼 수 없습니다.</p>
+        </form>
+      <% } %>
+      <% if (can('evaluation.withdraw') && e.evaluatee.id !== me.id) { %>
+        <form method="post" action="/evaluations/<%= e.id %>/withdraw">
+          <h3>평가 철회 (Underboss·Boss)</h3>
+          <input name="reason" required maxlength="500" placeholder="철회 사유" size="30"> <button class="danger">철회</button>
+          <p class="hint">기록은 지우지 않고 철회 표시를 남깁니다. 평판 집계에서 빠집니다.</p>
+        </form>
+      <% } %>
+    </div>
+  </section>
+<% } %>
+<%- include('partials/foot') %>

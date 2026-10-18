@@ -9,6 +9,7 @@ const taskAssigneeModel = require('../models/sql/taskAssigneeModel');
 const maintenanceModel = require('../models/sql/maintenanceModel');
 const userModel = require('../models/sql/userModel');
 const auditService = require('./auditService');
+const settings = require('./settingsService');
 const access = require('./accessService');
 const taskAccess = require('./taskAccess');
 const rules = require('./resourceRules');
@@ -277,9 +278,9 @@ async function reportDamage(actor, usageId, { description }, ctx) {
   return { usage: await presentById(usage.id), maintenance: P.presentMaintenance(m, refs) };
 }
 
-// #154 반환 예정 시각이 지난 미반환 목록 (오래 늦은 순)
+// #154 반환 예정 시각이 지난 미반환 목록 (오래 늦은 순). 운영 설정의 반환 연체 기준만큼 더 지난 것만 연체로 본다.
 async function overdue(actor, query) {
-  const { rows, total } = await resourceUsageModel.searchOverdue(query);
+  const { rows, total } = await resourceUsageModel.searchOverdue({ ...query, graceMinutes: await settings.get('returnGraceMinutes') });
   return { data: await presentUsages(rows), meta: pageMeta(query, total) };
 }
 

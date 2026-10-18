@@ -568,6 +568,32 @@ const tables = [
       CONSTRAINT fk_maintenance_completed_by FOREIGN KEY (completed_by) REFERENCES users (id) ON DELETE SET NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
   },
+
+  // ---------------------------------------------------------------------------
+  // 단계 6: 관리자 (FR-23). 역할별 권한은 config/permissions.js 기본값과 다른 것만 저장한다.
+  {
+    name: 'role_permission_overrides',
+    ddl: `CREATE TABLE IF NOT EXISTS role_permission_overrides (
+      role           ENUM(${enumOf(ROLE_INFO)}) NOT NULL,
+      permission_key VARCHAR(80)  NOT NULL,
+      allowed        TINYINT(1)   NOT NULL,
+      updated_by     INT UNSIGNED NULL,
+      updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (role, permission_key),
+      CONSTRAINT fk_permission_override_by FOREIGN KEY (updated_by) REFERENCES users (id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
+  {
+    // 운영 설정 (config/settings.js의 항목). 저장된 값이 없으면 기본값을 쓴다.
+    name: 'system_settings',
+    ddl: `CREATE TABLE IF NOT EXISTS system_settings (
+      setting_key   VARCHAR(50)  NOT NULL PRIMARY KEY,
+      setting_value VARCHAR(200) NOT NULL,
+      updated_by    INT UNSIGNED NULL,
+      updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT fk_setting_updated_by FOREIGN KEY (updated_by) REFERENCES users (id) ON DELETE SET NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+  },
 ];
 
 module.exports = { tables };

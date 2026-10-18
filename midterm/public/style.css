@@ -79,6 +79,8 @@ td form { display: inline-flex; gap: 4px; margin: 0 4px 0 0; align-items: center
 .badge.res-MAINTENANCE { background: #fff4dd; color: #8a5a00; }
 .badge.res-UNAVAILABLE { background: var(--err-bg); color: var(--err-ink); }
 tr.dim td { color: var(--muted); }
+.big { font-size: 1.8rem; font-weight: 700; }
+pre.mono { white-space: pre-wrap; word-break: break-all; background: #f6f7f9; padding: 8px; border-radius: 6px; margin: 0; }
 h1 .badge { vertical-align: middle; font-size: .8rem; }
 
 /* 알림 메시지 */
@@ -124,3 +126,63 @@ button.link { background: none; color: #d6d9e0; padding: 0; text-decoration: und
 .pos { font-size: .75rem; color: var(--muted); margin-right: 6px; }
 
 .pager { display: flex; gap: 12px; align-items: center; margin-top: 10px; color: var(--muted); font-size: .9rem; }
+
+/* ---------------------------------------------------------------------------
+   운영 현황 차트 (CSS만으로 그린다). 색은 역할 토큰으로만 쓰고, 값·이름 글자는 글자색 토큰을 쓴다.
+   범주 색(1~5)과 자원 상태 색은 색각 이상 구분·밝기 기준을 검사한 순서다. 대비가 낮은 색이 있어 모든 차트에 표 보기를 둔다. */
+.viz {
+  --viz-surface: #ffffff;
+  --viz-grid: #e1e0d9;
+  --viz-axis: #c3c2b7;
+  --viz-ink: #1f2430;
+  --viz-ink-2: #52514e;
+  --viz-muted: #6b7280;
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100; --series-5: #e87ba4;
+  --seq-track: #cde2fb;
+  --status-good: #0ca30c; --status-serious: #ec835a; --status-critical: #d03b3b;
+}
+.viz .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 8px; font-size: .85rem; color: var(--viz-ink-2); }
+.viz .key { display: inline-flex; align-items: center; gap: 6px; }
+.viz .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.viz .tip {
+  display: none; position: absolute; z-index: 5; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  background: var(--viz-surface); border: 1px solid var(--viz-grid); border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  padding: 6px 8px; font-size: .8rem; color: var(--viz-ink-2); white-space: nowrap; text-align: left; pointer-events: none;
+}
+.viz .tip strong { color: var(--viz-ink); }
+.viz .tip .line-key { display: inline-block; width: 10px; height: 2px; vertical-align: middle; margin-right: 4px; }
+.viz [tabindex]:hover .tip, .viz [tabindex]:focus .tip { display: block; }
+.viz [tabindex]:focus { outline: 2px solid var(--viz-axis); outline-offset: 2px; }
+
+/* 세로 막대(누적): 칸 전체가 마우스·키보드 대상, 막대는 24px 이하, 윗끝만 둥글게, 조각 사이 2px 틈 */
+.viz .columns { display: flex; align-items: stretch; gap: 2px; height: 180px; border-bottom: 1px solid var(--viz-axis); position: relative;
+  background: linear-gradient(to top, transparent calc(50% - 1px), var(--viz-grid) calc(50% - 1px), var(--viz-grid) 50%, transparent 50%); }
+.viz .col { flex: 1; position: relative; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; min-width: 0; }
+.viz .col:hover { background: rgba(31,36,48,.04); }
+.viz .stack { width: min(24px, 80%); display: flex; flex-direction: column-reverse; gap: 2px; border-radius: 4px 4px 0 0; overflow: hidden; }
+.viz .stack span { display: block; }
+.viz .cap { font-size: .72rem; color: var(--viz-ink-2); margin-bottom: 2px; }
+.viz .x-axis { display: flex; gap: 2px; font-size: .7rem; color: var(--viz-muted); margin-top: 4px; }
+.viz .x-axis span { flex: 1; text-align: center; min-width: 0; white-space: nowrap; overflow: visible; }
+.viz .y-max { position: absolute; left: 0; top: calc(50% - 1.1em); font-size: .7rem; color: var(--viz-muted); background: var(--viz-surface); padding-right: 4px; }
+
+/* 가로 막대: 이름 | 막대(시작점 직각, 끝 4px 둥글게) | 값 */
+.viz .hbars { display: grid; grid-template-columns: minmax(80px, max-content) 1fr minmax(48px, max-content); gap: 6px 10px; align-items: center; }
+.viz .hbars .name { font-size: .85rem; color: var(--viz-ink); white-space: nowrap; }
+.viz .hbars .value { font-size: .85rem; color: var(--viz-ink-2); font-variant-numeric: tabular-nums; text-align: right; }
+.viz .track { position: relative; height: 24px; display: flex; align-items: center; }
+.viz .track:hover { background: rgba(31,36,48,.04); }
+.viz .bar { height: 14px; display: flex; gap: 2px; border-radius: 0 4px 4px 0; overflow: hidden; min-width: 2px; }
+.viz .bar span { display: block; height: 100%; }
+
+/* 지표 타일과 계량기 (같은 색 계열의 밝은 칸 위에 채움) */
+.stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.stat .label { font-size: .85rem; color: var(--muted); }
+.stat .value { font-size: 1.7rem; font-weight: 600; line-height: 1.2; margin: 2px 0; }
+.stat .sub { font-size: .8rem; color: var(--muted); }
+.meter { height: 8px; border-radius: 4px; background: #cde2fb; overflow: hidden; margin-top: 6px; }
+.meter > span { display: block; height: 100%; background: #2a78d6; border-radius: 4px; }
+details.table-view { margin-top: 8px; font-size: .85rem; }
+details.table-view summary { cursor: pointer; color: var(--muted); }
+.status-icon { font-weight: 700; }

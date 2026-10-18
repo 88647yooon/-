@@ -98,7 +98,7 @@ async function usage(id, db = getPool()) {
 const commonConds = ({ categoryId, location, q }) => [
   categoryId && ['r.category_id = ?', categoryId],
   location && ['r.location LIKE ?', like(location)],
-  q && ['(r.name LIKE ? OR r.code LIKE ? OR r.description LIKE ?)', like(q), like(q), like(q)],
+  q && ['(r.name LIKE ? OR r.code LIKE ? OR r.description LIKE ? OR r.location LIKE ?)', like(q), like(q), like(q), like(q)],
 ];
 
 async function page(w, sort, paging, db) {
@@ -111,9 +111,11 @@ async function page(w, sort, paging, db) {
 }
 
 // #116 관리용 전체 자원 목록 (FR-13, FR-16). assignable=false면 점검중·사용불가 자원만 본다.
-async function search({ status, categoryId, location, minRole, assignable, q, sort = 'code', ...paging }, db = getPool()) {
+// maxRank를 주면 이용 최소 역할이 그 순위 이하인 자원만 본다 (통합 검색에서 일반 구성원의 범위).
+async function search({ status, categoryId, location, minRole, assignable, maxRank, q, sort = 'code', ...paging }, db = getPool()) {
   const w = where([
     status && ['r.status = ?', status],
+    maxRank && [`${RANK_SQL('r.min_role')} <= ?`, maxRank],
     minRole && ['r.min_role = ?', minRole],
     assignable === true && ['r.status IN (?)', ASSIGNABLE_STATUSES],
     assignable === false && ['r.status NOT IN (?)', ASSIGNABLE_STATUSES],

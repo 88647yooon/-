@@ -268,4 +268,39 @@
     <% } else { %><p class="denied"><%= capoHistory.message %></p><% } %>
   </section>
 </div>
+
+<section class="card">
+  <h2>소속원별 업무량 (앞으로 2주) <span class="tag">FR-12 · FR-22</span></h2>
+  <% if (workload.ok) { %>
+    <% if (workload.value.members.length) { %>
+      <table>
+        <thead><tr><th>구성원</th><th>배정 업무</th><th>끝나지 않은 업무</th><th>리더</th><th>업무 시간</th><th>다음 업무</th></tr></thead>
+        <tbody>
+          <% workload.value.members.forEach((m) => { %>
+            <tr><td><a href="/users/<%= m.user.id %>"><%= m.user.name %></a> <span class="muted small"><%= m.user.roleLabel %><%= m.membershipType === 'TEMPORARY' ? ' · 임시' : '' %></span></td>
+              <td class="mono"><%= m.taskCount %></td><td class="mono"><%= m.openCount %></td><td class="mono"><%= m.leaderCount %></td><td class="mono"><%= m.hours %>h</td>
+              <td class="small"><%= m.nextStartAt ? fmt(m.nextStartAt) : '-' %></td></tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <p class="hint">업무 시간이 많은 순입니다. 취소된 업무는 세지 않습니다.</p>
+    <% } else { %><p class="muted">소속원이 없습니다.</p><% } %>
+  <% } else { %><p class="denied"><%= workload.message %></p><% } %>
+</section>
+
+<section class="card">
+  <h2>Crew 활동 <span class="tag">FR-19 · FR-22</span></h2>
+  <% if (activity.ok) { %>
+    <% if (activity.value.data.length) { %>
+      <ul>
+        <% activity.value.data.forEach((a) => { %>
+          <li><span class="small muted"><%= fmt(a.at) %></span> <span class="badge"><%= a.actionLabel %></span>
+            <%= a.target.label || `${a.target.entity}#${a.target.id}` %><%= a.related.length ? ' · ' + a.related.map((r) => r.label || r.entity).join(', ') : '' %>
+            <span class="small muted"><%= a.actor ? '— ' + a.actor.username : '' %><%= a.reason ? ' · ' + a.reason : '' %></span></li>
+        <% }) %>
+      </ul>
+      <p class="hint">Crew·소속 변경과 이 Crew 업무의 활동·평가 기록 최근 30건입니다.</p>
+    <% } else { %><p class="muted">활동 기록이 없습니다.</p><% } %>
+  <% } else { %><p class="denied"><%= activity.message %></p><% } %>
+</section>
 <%- include('partials/foot') %>

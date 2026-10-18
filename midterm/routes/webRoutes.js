@@ -4,6 +4,8 @@ const express = require('express');
 const web = require('../controllers/webController');
 const webTask = require('../controllers/webTaskController');
 const webResource = require('../controllers/webResourceController');
+const webRecord = require('../controllers/webRecordController');
+const webOps = require('../controllers/webOpsController');
 const { webContext, requireLogin, webNotFound, webErrorHandler, kstDatetimes } = require('../middlewares/web');
 const { requirePermission } = require('../middlewares/authorize');
 const { validate } = require('../middlewares/validate');
@@ -448,6 +450,99 @@ router.post(
   webResource.adjustTaskResource,
 );
 router.post('/tasks/:taskId/resources/:resourceId/remove', ...allowed('task.manage'), validate(taskResourceParams), webResource.releaseTaskResource);
+
+// 평가·평판·감사 기록 (FR-18~FR-20, BR-10). 점수는 score_<항목 키>, 평가 항목은 key_<n>·label_<n>·weight_<n> 칸으로 받는다.
+const evaluationParams = { params: { evaluationId: fields.docId } };
+const localPeriod = { from: { type: 'string', max: 20 }, to: { type: 'string', max: 20 } };
+
+router.get(
+  '/evaluations',
+  ...allowed('evaluation.appeal'),
+  validate({
+    query: {
+      evaluateeId: fields.optionalId, evaluatorId: fields.optionalId, crewId: fields.optionalId, status: enums.evaluationStatus, ...localPeriod,
+      ...paging('evaluations'),
+    },
+  }),
+  webRecord.evaluationsPage,
+);
+router.get('/evaluations/:evaluationId', ...allowed('evaluation.read'), validate(evaluationParams), webRecord.evaluationPage);
+router.post(
+  '/tasks/:taskId/evaluations',
+  ...allowed('evaluation.write'),
+  validate({ ...taskParams, form: { evaluateeId: fields.id, comment: { type: 'string', max: 1000 } } }),
+  webRecord.createEvaluation,
+);
+router.post(
+  '/evaluations/:evaluationId/edit',
+  ...allowed('evaluation.write'),
+  validate({ ...evaluationParams, form: { comment: { type: 'string', max: 1000 }, reason: fields.reason } }),
+  webRecord.updateEvaluation,
+);
+router.post('/evaluations/:evaluationId/withdraw', ...allowed('evaluation.withdraw'), validate({ ...evaluationParams, form: { reason: fields.requiredReason } }), webRecord.withdrawEvaluation);
+router.post('/evaluations/:evaluationId/appeals', ...allowed('evaluation.appeal'), validate({ ...evaluationParams, form: { reason: fields.requiredReason } }), webRecord.appeal);
+router.post(
+  '/evaluation-appeals/:appealId/resolve',
+  ...allowed('evaluation.appeal.resolve'),
+  validate({ params: { appealId: fields.docId }, form: { decision: { ...enums.appealDecision, required: true }, note: fields.requiredReason, comment: { type: 'string', max: 1000 } } }),
+  webRecord.resolveAppeal,
+);
+router.post('/evaluation-criteria', ...allowed('evaluationCriteria.manage'), webRecord.replaceCriteria);
+router.post(
+  '/users/:userId/reputation-events',
+  ...allowed('reputation.record'),
+  validate({
+    ...userParams,
+    form: { kind: { ...enums.reputationKind, required: true }, points: fields.reputationPoints, title: { type: 'string', required: true, max: 100 }, description: fields.reason },
+  }),
+  webRecord.recordReputationEvent,
+);
+router.post('/reputation-events/:eventId/cancel', ...allowed('reputation.record'), validate({ params: { eventId: fields.docId }, form: { reason: fields.requiredReason } }), webRecord.cancelReputationEvent);
+
+const auditQuery = { action: enums.action, targetEntity: { type: 'string', max: 30 }, targetId: { type: 'string', max: 30 }, q: fields.q, ...localPeriod };
+router.get('/audit-logs', ...allowed('audit.read'), validate({ query: { ...auditQuery, ...paging('auditLogs') } }), webRecord.auditLogsPage);
+router.get('/audit-logs/export', ...allowed('audit.export'), validate({ query: { ...auditQuery, sort: paging('auditLogs').sort } }), webRecord.exportAuditLogs);
+router.get('/audit-logs/:logId', ...allowed('audit.read'), validate({ params: { logId: fields.docId } }), webRecord.auditLogPage);
+
+// 운영 현황·검색·관리자 (FR-21~FR-23, NFR-04). 관리자 화면은 API와 같은 admin.* 권한 키로 막는다 (BR-09).
+router.get(
+  '/dashboard',
+  ...allowed('stats.read'),
+  validate({ query: { days: { type: 'integer', enum: [7, 30, 90], default: 30 }, interval: enums.interval } }),
+  webOps.dashboardPage,
+);
+router.get(
+  '/search',
+  ...allowed('search.use'),
+  validate({ query: { q: { type: 'string', max: 50 }, types: enums.searchTypes, page: { type: 'integer', min: 1, default: 1 }, size: { type: 'integer', min: 1, max: 50, default: 10 } } }),
+  webOps.searchPage,
+);
+router.post(
+  '/saved-searches',
+  ...allowed('search.use'),
+  validate({ form: { name: { type: 'string', required: true, max: 50 }, q: { type: 'string', required: true, max: 50 }, types: enums.searchTypes } }),
+  webOps.saveSearch,
+);
+router.get('/saved-searches/:searchId', ...allowed('search.use'), validate({ params: { searchId: fields.docId } }), webOps.runSavedSearch);
+router.post('/saved-searches/:searchId/delete', ...allowed('search.use'), validate({ params: { searchId: fields.docId } }), webOps.removeSavedSearch);
+
+router.get(
+  '/admin',
+  ...allowed('admin.accounts'),
+  validate({ query: { q: fields.q, locked: { type: 'boolean' }, loginFailed: { type: 'boolean' }, role: enums.role, ...paging('accounts') } }),
+  webOps.adminPage,
+);
+router.post('/admin/accounts/:userId/lock', ...allowed('admin.accounts'), validate({ ...userParams, form: { reason: fields.requiredReason } }), webOps.lock);
+router.post('/admin/accounts/:userId/unlock', ...allowed('admin.accounts'), validate({ ...userParams, form: { reason: fields.reason } }), webOps.unlock);
+router.post('/admin/accounts/:userId/password-reset', ...allowed('admin.accounts'), validate({ ...userParams, form: { reason: fields.reason } }), webOps.resetPassword);
+router.post('/admin/accounts/:userId/sessions', ...allowed('admin.accounts'), validate({ ...userParams, form: { reason: fields.reason } }), webOps.forceLogout);
+router.post(
+  '/admin/permissions/:role',
+  ...allowed('admin.permissions'),
+  validate({ params: { role: { ...enums.role, required: true } }, form: { reason: fields.reason } }),
+  webOps.setRolePermissions,
+);
+router.post('/admin/settings', ...allowed('admin.settings'), validate({ form: { reason: fields.reason } }), webOps.updateSettings);
 
 router.use(webNotFound);
 router.use(webErrorHandler);

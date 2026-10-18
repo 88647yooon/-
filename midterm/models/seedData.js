@@ -212,7 +212,37 @@ const resourceRequests = [
   { code: 'RD-002', user: 'soldier3', start: { day: 2, hour: 13 }, end: { day: 2, hour: 17 }, reason: '거래처 방문 중 연락용' },
 ];
 
+// ---------------------------------------------------------------------------
+// 단계 5: 평가·평판. 점수 키는 평가 항목의 key다.
+const evaluationCriteria = [
+  { key: 'diligence', label: '성실성', description: '맡은 일을 끝까지 책임지고 해냈는가', weight: 1 },
+  { key: 'performance', label: '업무 성과', description: '업무 목표를 얼마나 달성했는가', weight: 2 },
+  { key: 'teamwork', label: '협업', description: '다른 참여자와 잘 협력했는가', weight: 1 },
+  { key: 'discretion', label: '보안 준수', description: '정보를 밖으로 흘리지 않고 지시를 지켰는가', weight: 1 },
+];
+
+// 완료된 '강남 정보 수집'의 참여자 평가. soldier1은 underboss1에게 받은 평가에 이의를 제기해 두었다 (처리 확인용).
+// capo2는 soldier1을 아직 평가하지 않았다 (작성할 평가 확인용).
+const evaluations = [
+  {
+    task: 'intel', evaluator: 'capo2', evaluatee: 'soldier3',
+    scores: { diligence: 5, performance: 5, teamwork: 4, discretion: 5 }, comment: '현장 조사와 보고서 작성을 주도했습니다.',
+  },
+  {
+    task: 'intel', evaluator: 'underboss1', evaluatee: 'soldier1',
+    scores: { diligence: 4, performance: 3, teamwork: 2, discretion: 4 }, comment: '자료 정리는 좋았지만 공유가 늦었습니다.',
+    appeal: '임시 소속이라 공유 채널을 늦게 받았습니다. 협업 점수를 다시 봐 주세요.',
+  },
+];
+
+// 업무 밖 공로·징계 (points는 크기, 징계는 음수로 저장된다)
+const reputationEvents = [
+  { user: 'soldier3', by: 'underboss1', kind: 'MERIT', points: 3, title: '정보 보고서 우수', description: '강남 정보 수집 보고서가 간부 회의 자료로 쓰였다.' },
+  { user: 'associate1', by: 'underboss1', kind: 'DISCIPLINE', points: 2, title: '보고 지연', description: '물품 운송 중간 보고를 두 번 늦게 했다.' },
+];
+
 module.exports = {
+  evaluationCriteria, evaluations, reputationEvents,
   users, crews, joinRequests, roleRequests, taskTypes, tasks, swapRequests,
   resourceCategories, resources, taskResourceRequirements, taskResources, resourceAllocations, resourceUsages,
   maintenances, resourceStatusChanges, resourceRequests,

@@ -29,6 +29,8 @@ async function connectMySQL({ reset }) {
 async function connectMongo({ reset }) {
   await mongoose.connect(config.mongo.uri, { serverSelectionTimeoutMS: 5000 });
   if (reset) await mongoose.connection.dropDatabase();
+  // 유일성 같은 규칙을 지키는 인덱스가 요청을 받기 전에 만들어져 있도록 기다린다.
+  await Promise.all(mongoose.modelNames().map((name) => mongoose.model(name).createIndexes()));
 }
 
 async function connect({ reset = false } = {}) {

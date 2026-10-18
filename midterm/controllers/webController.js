@@ -13,6 +13,8 @@ const joinRequestService = require('../services/joinRequestService');
 const roleRequestService = require('../services/roleRequestService');
 const { setLoginCookie, clearLoginCookie, setFlash, safeNext } = require('../middlewares/web');
 const { CHECKS, SCENARIOS } = require('./webGuide');
+const webRecord = require('./webRecordController');
+const webOps = require('./webOpsController');
 const { optional, denied, userIdOf, action, nothingChanged } = require('./webHelpers');
 const { contextOf } = require('../utils/context');
 
@@ -58,13 +60,14 @@ async function logout(req, res) {
 // 내 정보
 
 async function mePage(req, res) {
-  const [profile, permissions, sessions, joinRequests] = await Promise.all([
+  const [profile, permissions, sessions, joinRequests, summary] = await Promise.all([
     meService.getMe(req.user),
     meService.getPermissions(req.user),
     authService.listSessions(req.user, req.sessionId),
     joinRequestService.listMine(req.user, { page: 1, size: 20 }),
+    webOps.myDashboard(req.user),
   ]);
-  res.render('me', { title: '내 정보', profile, permissions, sessions, joinRequests: joinRequests.data });
+  res.render('me', { title: '내 정보', profile, permissions, sessions, joinRequests: joinRequests.data, summary });
 }
 
 const updateProfile = action(async (req) => {
@@ -105,12 +108,13 @@ const createUser = action(async (req) => {
 async function userPage(req, res) {
   const { userId } = req.valid.params;
   const user = await userService.get(req.user, userId);
-  const [chain, memberships, subordinates] = await Promise.all([
+  const [chain, memberships, subordinates, records] = await Promise.all([
     optional(() => userService.chainOfCommand(req.user, userId)),
     optional(() => userService.memberships(req.user, userId, { page: 1, size: 50 })),
     optional(() => userService.subordinates(req.user, userId, { page: 1, size: 50, sort: '-rank' })),
+    webRecord.userRecords(req.user, userId),
   ]);
-  res.render('user', { title: user.name, user, chain, memberships, subordinates });
+  res.render('user', { title: user.name, user, chain, memberships, subordinates, ...records });
 }
 
 const updateUser = action(async (req) => {
@@ -160,7 +164,7 @@ async function crewPage(req, res) {
   const { crewId } = req.valid.params;
   const { can } = res.locals;
   const crew = await crewService.get(req.user, crewId);
-  const [hierarchy, members, history, capoHistory, joinRequests, activeCrews, myMembership] = await Promise.all([
+  const [hierarchy, members, history, capoHistory, joinRequests, activeCrews, myMembership, activity, workload] = await Promise.all([
     optional(() => crewService.hierarchy(req.user, crewId)),
     optional(() => membershipService.listMembers(req.user, crewId, { page: 1, size: 100, sort: '-rank' })),
     optional(() => membershipService.history(req.user, crewId, { page: 1, size: 30 })),
@@ -172,9 +176,11 @@ async function crewPage(req, res) {
       : denied('Crew 책임자와 Underboss·Boss만 볼 수 있습니다.'),
     crewService.list(req.user, { status: 'ACTIVE', page: 1, size: 100, sort: 'name' }),
     membershipModel.findActive(crewId, req.user.id),
+    can('crew.activity.read') ? webRecord.crewActivity(req.user, crewId) : denied('그 Crew의 책임자와 Underboss·Boss만 볼 수 있습니다.'),
+    can('crew.workload.read') ? webOps.crewWorkload(req.user, crewId) : denied('그 Crew의 책임자와 Underboss·Boss만 볼 수 있습니다.'),
   ]);
   res.render('crew', {
-    title: crew.name, crew, hierarchy, members, history, capoHistory, joinRequests,
+    title: crew.name, crew, hierarchy, members, history, capoHistory, joinRequests, activity, workload,
     isMember: Boolean(myMembership),
     otherCrews: activeCrews.data.filter((c) => c.id !== crew.id),
   });

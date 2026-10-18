@@ -1,0 +1,282 @@
+<%- include('partials/head') %>
+<%
+  // 축 눈금: 일 '10-16', 주 'W42', 월 '2026-10'. 묶음이 많으면 8개 정도만 보인다.
+  const short = (period) => (/^\d{4}-\d{2}$/.test(period) ? period : period.slice(5));
+  const tick = (period, i, n) => (i % Math.max(1, Math.ceil(n / 8)) === 0 ? short(period) : '');
+  const resourceStates = [
+    { status: 'AVAILABLE', label: '사용가능', icon: '✓', color: 'var(--status-good)' },
+    { status: 'IN_USE', label: '사용중', icon: '●', color: 'var(--series-1)' },
+    { status: 'MAINTENANCE', label: '점검중', icon: '⚠', color: 'var(--status-serious)' },
+    { status: 'UNAVAILABLE', label: '사용불가', icon: '✕', color: 'var(--status-critical)' },
+  ];
+%>
+<h1>운영 현황 <span class="tag">FR-22</span></h1>
+
+<form method="get" action="/dashboard" class="form-row">
+  <label>기간
+    <select name="days"><% [[7, '최근 7일'], [30, '최근 30일'], [90, '최근 90일']].forEach(([v, l]) => { %><option value="<%= v %>" <%= days === v ? 'selected' : '' %>><%= l %></option><% }) %></select>
+  </label>
+  <label>묶음 단위
+    <select name="interval"><% [['day', '일'], ['week', '주'], ['month', '월']].forEach(([v, l]) => { %><option value="<%= v %>" <%= interval === v ? 'selected' : '' %>><%= l %></option><% }) %></select>
+  </label>
+  <button>적용</button>
+  <span class="hint">기간은 아래 모든 통계에 적용됩니다 (업무 추이는 예정된 업무가 보이도록 앞으로 <%= days %>일까지). 기준 시각 <%= fmt(now) %></span>
+</form>
+
+<div class="stat-row">
+  <div class="stat">
+    <div class="label">활동중 구성원</div>
+    <div class="value"><%= overview.members.byStatus.ACTIVE %></div>
+    <div class="sub">전체 <%= overview.members.total %>명 · 대기 <%= overview.members.byStatus.PENDING %> · 정지 <%= overview.members.byStatus.SUSPENDED %> · 탈퇴 <%= overview.members.byStatus.WITHDRAWN %></div>
+  </div>
+  <div class="stat">
+    <div class="label">활성 Crew</div>
+    <div class="value"><%= overview.crews.active %></div>
+    <div class="sub">해산 <%= overview.crews.disbanded %></div>
+  </div>
+  <div class="stat">
+    <div class="label">끝나지 않은 업무</div>
+    <div class="value"><%= overview.tasks.open %></div>
+    <div class="sub">진행 <%= overview.tasks.inProgress %> · 전체 <%= overview.tasks.total %>건 · 완료 <%= overview.tasks.byStatus.COMPLETED %></div>
+  </div>
+  <div class="stat">
+    <div class="label">자원 가용률</div>
+    <div class="value"><%= overview.resources.availabilityRate %>%</div>
+    <div class="meter" role="img" aria-label="자원 가용률 <%= overview.resources.availabilityRate %>%"><span style="width: <%= overview.resources.availabilityRate %>%"></span></div>
+    <div class="sub">사용가능 <%= overview.resources.byStatus.AVAILABLE %> / 전체 <%= overview.resources.total %></div>
+  </div>
+  <div class="stat">
+    <div class="label">평균 평가</div>
+    <div class="value"><%= overview.evaluations.averageScore ?? '-' %></div>
+    <div class="sub">유효 평가 <%= overview.evaluations.count %>건 (5점 만점)</div>
+  </div>
+</div>
+
+<section class="card viz">
+  <h2>업무 상태 추이 <span class="tag">FR-22 · #189</span></h2>
+  <p class="section-note muted">일정 시작일로 묶은 업무 수를 지금 상태별로 쌓았습니다. 막대에 마우스를 올리거나 Tab으로 이동하면 값이 보입니다.</p>
+  <div class="legend"><% taskStatuses.forEach((s) => { %><span class="key"><span class="swatch" style="background: <%= s.color %>"></span><%= s.label %></span><% }) %></div>
+  <% const maxTotal = Math.max(1, ...trend.buckets.map((b) => b.total)); const half = Math.ceil(maxTotal / 2); const scale = half * 2;
+     const peak = trend.buckets.findIndex((b) => b.total === maxTotal); /* 값 글자는 가장 큰 묶음 하나에만 */ %>
+  <div class="columns" role="img" aria-label="기간별 업무 수 (상태별 누적)">
+    <span class="y-max"><%= half %></span>
+    <% trend.buckets.forEach((b, i) => { %>
+      <div class="col" tabindex="0" aria-label="<%= b.period %> 업무 <%= b.total %>건">
+        <% if (b.total) { %>
+          <span class="cap"><%= i === peak ? b.total : '' %></span>
+          <div class="stack" style="height: <%= (b.total / scale) * 100 %>%">
+            <% taskStatuses.forEach((s) => { if (b.byStatus[s.status]) { %><span style="flex: <%= b.byStatus[s.status] %>; background: <%= s.color %>"></span><% } }) %>
+          </div>
+        <% } %>
+        <div class="tip">
+          <%= b.period %><br>
+          <% taskStatuses.forEach((s) => { if (b.byStatus[s.status]) { %><span class="line-key" style="background: <%= s.color %>"></span><strong><%= b.byStatus[s.status] %></strong> <%= s.label %><br><% } }) %>
+          <strong><%= b.total %></strong> 합계
+        </div>
+      </div>
+    <% }) %>
+  </div>
+  <div class="x-axis"><% trend.buckets.forEach((b, i) => { %><span><%= tick(b.period, i, trend.buckets.length) %></span><% }) %></div>
+  <details class="table-view">
+    <summary>표로 보기</summary>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>기간</th><% taskStatuses.forEach((s) => { %><th><%= s.label %></th><% }) %><th>합계</th></tr></thead>
+        <tbody>
+          <% trend.buckets.filter((b) => b.total).forEach((b) => { %>
+            <tr><td><%= b.period %></td><% taskStatuses.forEach((s) => { %><td class="mono"><%= b.byStatus[s.status] %></td><% }) %><td class="mono"><%= b.total %></td></tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </details>
+</section>
+
+<div class="cols">
+  <section class="card viz">
+    <h2>자원 상태와 가동률 <span class="tag">FR-16 · FR-22 · #191</span></h2>
+    <div class="legend"><% resourceStates.forEach((s) => { %><span class="key"><span class="swatch" style="background: <%= s.color %>"></span><span class="status-icon"><%= s.icon %></span><%= s.label %></span><% }) %></div>
+    <% const maxRes = Math.max(1, ...resources.categories.map((c) => c.total)); %>
+    <div class="hbars">
+      <% resources.categories.forEach((c) => { %>
+        <span class="name"><%= c.category.name %></span>
+        <div class="track" tabindex="0" aria-label="<%= c.category.name %> 자원 <%= c.total %>개">
+          <% if (c.total) { %>
+            <div class="bar" style="width: <%= (c.total / maxRes) * 100 %>%">
+              <% resourceStates.forEach((s) => { if (c.byStatus[s.status]) { %><span style="flex: <%= c.byStatus[s.status] %>; background: <%= s.color %>"></span><% } }) %>
+            </div>
+          <% } %>
+          <div class="tip"><%= c.category.name %><br>
+            <% resourceStates.forEach((s) => { %><span class="line-key" style="background: <%= s.color %>"></span><strong><%= c.byStatus[s.status] %></strong> <%= s.label %><br><% }) %>
+            가동률 <strong><%= c.utilizationRate %>%</strong></div>
+        </div>
+        <span class="value"><%= c.total %>개 · <%= c.utilizationRate %>%</span>
+      <% }) %>
+    </div>
+    <p class="hint">오른쪽은 자원 수와 가동률(지난 <%= days %>일 사용 시간 / (자원 수 × 기간))입니다. 전체 가동률 <%= resources.utilizationRate %>%, 사용 시간 <%= resources.usedHours %>시간.</p>
+    <details class="table-view">
+      <summary>표로 보기</summary>
+      <table>
+        <thead><tr><th>분류</th><% resourceStates.forEach((s) => { %><th><%= s.label %></th><% }) %><th>사용 시간</th><th>가동률</th></tr></thead>
+        <tbody>
+          <% resources.categories.forEach((c) => { %><tr><td><%= c.category.name %></td><% resourceStates.forEach((s) => { %><td class="mono"><%= c.byStatus[s.status] %></td><% }) %><td class="mono"><%= c.usedHours %></td><td class="mono"><%= c.utilizationRate %>%</td></tr><% }) %>
+        </tbody>
+      </table>
+    </details>
+  </section>
+
+  <section class="card viz">
+    <h2>자원 사용 순위 <span class="tag">FR-15 · #192</span></h2>
+    <p class="section-note muted">지난 <%= days %>일 사용 시간</p>
+    <% const maxHours = Math.max(0.1, ...ranking.map((r) => r.usedHours)); %>
+    <% if (ranking.length) { %>
+      <div class="hbars">
+        <% ranking.forEach((r) => { %>
+          <a class="name" href="/resources/<%= r.resource.id %>"><%= r.resource.name %></a>
+          <div class="track" tabindex="0" aria-label="<%= r.resource.name %> <%= r.usedHours %>시간">
+            <div class="bar" style="width: <%= (r.usedHours / maxHours) * 100 %>%"><span style="flex: 1; background: var(--series-1)"></span></div>
+            <div class="tip"><%= r.resource.code %> <%= r.resource.name %><br><strong><%= r.usedHours %>시간</strong> 사용 · <strong><%= r.usageCount %>회</strong> 시작</div>
+          </div>
+          <span class="value"><%= r.usedHours %>h</span>
+        <% }) %>
+      </div>
+    <% } else { %><p class="muted">기간 안 사용 기록이 없습니다.</p><% } %>
+    <details class="table-view">
+      <summary>표로 보기</summary>
+      <table><thead><tr><th>순위</th><th>자원</th><th>시작 횟수</th><th>사용 시간</th></tr></thead>
+        <tbody><% ranking.forEach((r) => { %><tr><td><%= r.rank %></td><td><%= r.resource.code %> <%= r.resource.name %></td><td class="mono"><%= r.usageCount %></td><td class="mono"><%= r.usedHours %></td></tr><% }) %></tbody></table>
+    </details>
+  </section>
+</div>
+
+<section class="card">
+  <h2>Crew 비교 <span class="tag">FR-22 · #187</span></h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Crew</th><th>책임자</th><th>정식/임시</th><th>업무 (진행/완료/취소)</th><th>완료율</th><th>평가 평균</th></tr></thead>
+      <tbody>
+        <% crews.crews.forEach((c) => { %>
+          <tr>
+            <td><a href="/crews/<%= c.crew.id %>"><%= c.crew.name %></a> <span class="muted small"><%= c.crew.region %></span></td>
+            <td class="small"><%= c.capo ? c.capo.name : '-' %></td>
+            <td class="mono"><%= c.regularCount %> / <%= c.temporaryCount %></td>
+            <td class="mono"><%= c.taskCount %> (<%= c.openCount %>/<%= c.completedCount %>/<%= c.cancelledCount %>)</td>
+            <td style="min-width: 120px"><span class="mono"><%= c.completionRate %>%</span>
+              <div class="meter" role="img" aria-label="완료율 <%= c.completionRate %>%"><span style="width: <%= c.completionRate %>%"></span></div></td>
+            <td class="mono"><%= c.evaluationAverage ?? '-' %><%= c.evaluationCount ? ` (${c.evaluationCount})` : '' %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <p class="hint">업무는 일정 시작이 지난 <%= days %>일~앞으로 <%= days %>일 안인 것, 완료율 = 완료 / (완료 + 취소)입니다. 평가 평균은 MongoDB에서 집계합니다.</p>
+</section>
+
+<div class="cols">
+  <section class="card">
+    <h2>구성원 분포 <span class="tag">FR-04 · #186</span></h2>
+    <table>
+      <thead><tr><th>역할</th><% members.statuses.forEach((s) => { %><th><%= s.label %></th><% }) %><th>합계</th></tr></thead>
+      <tbody>
+        <% members.byRole.forEach((r) => { %><tr><td><%= r.label %></td><% members.statuses.forEach((s) => { %><td class="mono"><%= r.byStatus[s.status] %></td><% }) %><td class="mono"><strong><%= r.total %></strong></td></tr><% }) %>
+        <tr><td><strong>합계</strong></td><% members.statuses.forEach((s) => { %><td class="mono"><strong><%= members.byStatus[s.status] %></strong></td><% }) %><td class="mono"><strong><%= members.total %></strong></td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>지역별 <span class="tag">#188</span></h2>
+    <table>
+      <thead><tr><th>지역</th><th>Crew (활성)</th><th>소속원</th><th>업무</th></tr></thead>
+      <tbody><% regions.forEach((r) => { %><tr><td><%= r.region %></td><td class="mono"><%= r.crews %> (<%= r.activeCrews %>)</td><td class="mono"><%= r.members %></td><td class="mono"><%= r.tasks %></td></tr><% }) %></tbody>
+    </table>
+    <h3>중요도별 소요 시간 <span class="tag">#190</span></h3>
+    <table>
+      <thead><tr><th>중요도</th><th>완료</th><th>평균 소요</th><th>평균 계획</th><th>평균 지연</th></tr></thead>
+      <tbody><% leadTimes.priorities.forEach((p) => { %><tr><td><%= p.label %></td><td class="mono"><%= p.completedCount %></td><td class="mono"><%= p.averageLeadHours ?? '-' %>h</td><td class="mono"><%= p.averagePlannedHours ?? '-' %>h</td><td class="mono"><%= p.averageDelayHours ?? '-' %>h</td></tr><% }) %></tbody>
+    </table>
+    <p class="hint">지난 <%= days %>일 동안 완료된 업무 기준 (소요 = 실제 시작 → 완료)</p>
+  </section>
+</div>
+
+<div class="cols">
+  <section class="card viz">
+    <h2>평가 평균 추이 <span class="tag">FR-18 · #193</span></h2>
+    <p class="section-note muted">유효한 평가의 평균 점수 (5점 만점, MongoDB aggregate)</p>
+    <div class="columns" role="img" aria-label="기간별 평가 평균" style="height: 140px">
+      <span class="y-max">2.5</span>
+      <% evaluations.buckets.forEach((b) => { %>
+        <div class="col" tabindex="0" aria-label="<%= b.period %> 평균 <%= b.averageScore ?? '없음' %>">
+          <% if (b.count) { %>
+            <span class="cap"><%= b.averageScore %></span>
+            <div class="stack" style="height: <%= (b.averageScore / 5) * 100 %>%"><span style="flex: 1; background: var(--series-1)"></span></div>
+          <% } %>
+          <div class="tip"><%= b.period %><br><strong><%= b.averageScore ?? '-' %></strong> 평균 · <strong><%= b.count %></strong>건</div>
+        </div>
+      <% }) %>
+    </div>
+    <div class="x-axis"><% evaluations.buckets.forEach((b, i) => { %><span><%= tick(b.period, i, evaluations.buckets.length) %></span><% }) %></div>
+    <details class="table-view">
+      <summary>표로 보기</summary>
+      <table><thead><tr><th>기간</th><th>평가 수</th><th>평균</th></tr></thead>
+        <tbody><% evaluations.buckets.forEach((b) => { %><tr><td><%= b.period %></td><td class="mono"><%= b.count %></td><td class="mono"><%= b.averageScore ?? '-' %></td></tr><% }) %></tbody></table>
+      <p>Crew별: <%= evaluations.byCrew.map((c) => `${c.label} ${c.averageScore}점(${c.count})`).join(', ') || '없음' %></p>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>소속 변화 <span class="tag">BR-10 · #194</span></h2>
+    <div class="stat-row">
+      <div class="stat"><div class="label">새 소속</div><div class="value"><%= changes.totals.joined %></div></div>
+      <div class="stat"><div class="label">이동</div><div class="value"><%= changes.totals.transferred %></div></div>
+      <div class="stat"><div class="label">제외</div><div class="value"><%= changes.totals.removed %></div></div>
+      <div class="stat"><div class="label">탈퇴</div><div class="value"><%= changes.totals.withdrawn %></div></div>
+    </div>
+    <details class="table-view">
+      <summary>기간별로 보기</summary>
+      <table><thead><tr><th>기간</th><th>새 소속</th><th>이동</th><th>제외</th><th>탈퇴</th></tr></thead>
+        <tbody><% changes.buckets.filter((b) => b.joined + b.transferred + b.removed + b.withdrawn).forEach((b) => { %><tr><td><%= b.period %></td><td class="mono"><%= b.joined %></td><td class="mono"><%= b.transferred %></td><td class="mono"><%= b.removed %></td><td class="mono"><%= b.withdrawn %></td></tr><% }) %></tbody></table>
+    </details>
+    <p class="hint">지난 <%= days %>일의 Crew 소속 기록 (SQL)</p>
+  </section>
+</div>
+
+<section class="card">
+  <h2>운영 경고 <span class="tag">FR-15 · FR-16 · #196</span></h2>
+  <div class="cols">
+    <div>
+      <h3><span class="status-icon" style="color: var(--err-ink)">✕</span> 반환 연체 자원 <%= alerts.counts.overdueUsages %>건</h3>
+      <% if (alerts.overdueUsages.length) { %><ul class="small"><% alerts.overdueUsages.slice(0, 10).forEach((u) => { %><li><a href="/resources/<%= u.resource.id %>"><%= u.resource.name %></a> · <%= u.user.name %> · <%= u.hoursLate %>시간 지남</li><% }) %></ul><% } else { %><p class="muted small">없음</p><% } %>
+    </div>
+    <div>
+      <h3><span class="status-icon" style="color: #8a5a00">⚠</span> 일정이 지난 미완료 업무 <%= alerts.counts.overdueTasks %>건</h3>
+      <% if (alerts.overdueTasks.length) { %><ul class="small"><% alerts.overdueTasks.slice(0, 10).forEach((x) => { %><li><a href="/tasks/<%= x.id %>"><%= x.title %></a> · <%= x.statusLabel %> · <%= x.hoursLate %>시간 지남</li><% }) %></ul><% } else { %><p class="muted small">없음</p><% } %>
+    </div>
+    <div>
+      <h3><span class="status-icon" style="color: #8a5a00">⚠</span> 장기 점검 <%= alerts.counts.longMaintenances %>건</h3>
+      <% if (alerts.longMaintenances.length) { %><ul class="small"><% alerts.longMaintenances.slice(0, 10).forEach((m) => { %><li><a href="/resources/<%= m.resource.id %>"><%= m.resource.name %></a> · <%= m.daysOpen %>일째<%= m.pastExpected ? ' · 예정일 지남' : '' %></li><% }) %></ul><% } else { %><p class="muted small">없음</p><% } %>
+    </div>
+  </div>
+  <p class="hint">기준은 운영 설정을 따릅니다: 반환 연체 <%= alerts.criteria.returnGraceMinutes %>분, 장기 점검 <%= alerts.criteria.longMaintenanceDays %>일.</p>
+</section>
+
+<% if (adminActivity) { %>
+  <section class="card viz">
+    <h2>관리 활동 <span class="tag">FR-20 · #195</span></h2>
+    <p class="section-note muted">지난 <%= days %>일 활동 기록 <%= adminActivity.total %>건 (MongoDB aggregate)</p>
+    <% const maxArea = Math.max(1, ...adminActivity.areas.map((a) => a.count)); %>
+    <div class="hbars">
+      <% adminActivity.areas.filter((a) => a.count).forEach((a) => { %>
+        <span class="name"><%= a.label %></span>
+        <div class="track" tabindex="0" aria-label="<%= a.label %> <%= a.count %>건">
+          <div class="bar" style="width: <%= (a.count / maxArea) * 100 %>%"><span style="flex: 1; background: var(--series-1)"></span></div>
+          <div class="tip"><%= a.label %><br><strong><%= a.count %>건</strong></div>
+        </div>
+        <span class="value"><%= a.count %></span>
+      <% }) %>
+    </div>
+    <h3>많이 한 행위</h3>
+    <ol class="small"><% adminActivity.topActions.forEach((a) => { %><li><%= a.label %> <span class="mono muted"><%= a.action %></span> · <%= a.count %>건</li><% }) %></ol>
+    <p class="small">행위자 역할: <%= adminActivity.byActorRole.map((r) => `${r.label} ${r.count}`).join(' · ') %></p>
+  </section>
+<% } %>
+<%- include('partials/foot') %>

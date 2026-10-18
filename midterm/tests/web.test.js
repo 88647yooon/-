@@ -67,7 +67,7 @@ describe('웹 화면 (CR-02)', () => {
     const res = await browser().get('/');
     assert.equal(res.status, 200);
     assert.match(res.type, /^text\/html/);
-    for (const text of ['기능 요구사항 확인', 'FR-01', 'FR-06', 'FR-07', 'FR-12', 'FR-13', 'FR-17', '업무 규칙 확인 시나리오', 'BR-01', 'BR-05', 'BR-03', 'BR-06', 'BR-07', 'BR-08', '테스트 계정', 'underboss1']) {
+    for (const text of ['기능 요구사항 확인', 'FR-01', 'FR-06', 'FR-07', 'FR-12', 'FR-13', 'FR-17', 'FR-18', 'FR-20', 'FR-21', 'FR-23', '업무 규칙 확인 시나리오', 'BR-01', 'BR-05', 'BR-03', 'BR-06', 'BR-07', 'BR-08', 'BR-10', '테스트 계정', 'underboss1']) {
       assert.ok(res.html.includes(text), `홈 화면에 '${text}' 없음`);
     }
   });
@@ -326,5 +326,166 @@ describe('자원 화면 (단계 4)', () => {
 
     const history = await b.get(resource.path);
     assert.ok(history.html.includes(user.username) && history.html.includes('웹 반환'));
+  });
+});
+
+describe('평가·기록 화면 (단계 5)', () => {
+  const HOUR = 60 * 60 * 1000;
+  const BASE = Math.floor(Date.now() / HOUR) * HOUR + (400 + Math.floor(Math.random() * 3000)) * 24 * HOUR;
+  let slot = 0;
+  const ok = (res, status = 200) => {
+    assert.equal(res.status, status, res.text);
+    return res.body.data;
+  };
+  // API로 업무를 만들어 참여자를 배정·시작·완료한다 (Boss의 조직 업무).
+  async function completedTask(user) {
+    slot += 3;
+    const body = { title: `웹 평가 ${Date.now()}`, startAt: new Date(BASE + slot * HOUR).toISOString(), endAt: new Date(BASE + (slot + 1) * HOUR).toISOString() };
+    const task = ok(await t.api('POST', '/api/tasks', { token: tokens.boss, body }), 201);
+    ok(await t.api('POST', `/api/tasks/${task.id}/assignees`, { token: tokens.boss, body: { assignees: [{ userId: user.id }] } }), 201);
+    ok(await t.api('PATCH', `/api/tasks/${task.id}/status`, { token: tokens.boss, body: { status: 'IN_PROGRESS' } }));
+    ok(await t.api('POST', `/api/tasks/${task.id}/complete`, { token: tokens.boss, body: { outcome: 'SUCCESS', summary: '완료', participations: [{ userId: user.id, participated: true }] } }));
+    return task;
+  }
+  const scoreForm = async () => Object.fromEntries(ok(await t.api('GET', '/api/evaluation-criteria', { token: tokens.boss })).map((c) => [`score_${c.key}`, '4']));
+
+  it('구성원 화면에 평판·받은 평가·변경 이력·활동이 보이고, 권한 밖이면 그 영역만 막힌다', async () => {
+    const s = browser();
+    await s.login('soldier1');
+    const own = await s.get(`/users/${(await userModel.findByUsername('soldier1')).id}`);
+    assert.equal(own.status, 200);
+    for (const text of ['평판', '받은 평가', '강남 정보 수집', '변경 이력 (시간순)', '계정 등록', '활동']) assert.ok(own.html.includes(text), text);
+    const other = await s.get(`/users/${seed.soldier3.id}`);
+    assert.equal(other.status, 200);
+    assert.ok(other.html.includes('class="denied"'));
+    assert.ok(!other.html.includes('계정 등록'));
+  });
+
+  it('화면에서 완료된 업무의 참여자를 평가하고, 완료되지 않은 업무는 오류 메시지가 보인다', async () => {
+    const member = await makeUser(t, tokens);
+    const task = await completedTask(member);
+    const b = browser();
+    await b.login('boss');
+    const page = await b.get(`/tasks/${task.id}`);
+    assert.ok(page.html.includes('참여자 평가'));
+    const created = await b.flashAfter(`/tasks/${task.id}/evaluations`, { evaluateeId: String(member.id), comment: '웹 평가', ...(await scoreForm()) }, `/tasks/${task.id}`);
+    assert.equal(created.type, 'success', created.text);
+    assert.match(created.text, /4점/);
+
+    slot += 3;
+    const open = ok(await t.api('POST', '/api/tasks', { token: tokens.boss, body: { title: '웹 미완료', startAt: new Date(BASE + slot * HOUR).toISOString(), endAt: new Date(BASE + (slot + 1) * HOUR).toISOString() } }), 201);
+    const refused = await b.flashAfter(`/tasks/${open.id}/evaluations`, { evaluateeId: String(member.id), ...(await scoreForm()) }, `/tasks/${open.id}`);
+    assert.equal(refused.type, 'error');
+    assert.match(refused.text, /완료된 업무만/);
+  });
+
+  it('화면에서 이의를 제기하고 Underboss·Boss가 정정하면 평가 상세에 정정 이력이 보인다', async () => {
+    const member = await makeUser(t, tokens);
+    const task = await completedTask(member);
+    const scores = Object.fromEntries(ok(await t.api('GET', '/api/evaluation-criteria', { token: tokens.boss })).map((c) => [c.key, 2]));
+    const e = ok(await t.api('POST', `/api/tasks/${task.id}/evaluations`, { token: tokens.boss, body: { evaluateeId: member.id, scores } }), 201);
+
+    const m = browser();
+    await m.login(member.username, member.password);
+    assert.equal((await m.flashAfter(`/evaluations/${e.id}/appeals`, { reason: '웹 이의' }, `/evaluations/${e.id}`)).type, 'success');
+    const u = browser();
+    await u.login('underboss1');
+    const list = await u.get('/evaluations');
+    assert.ok(list.html.includes('처리할 이의 제기') && list.html.includes('웹 이의'));
+    const appealId = list.html.match(new RegExp(`/evaluation-appeals/([a-f0-9]{24})/resolve`))[1];
+    const resolved = await u.flashAfter(`/evaluation-appeals/${appealId}/resolve`, { decision: 'CORRECT', note: '웹 정정', ...(await scoreForm()) }, '/evaluations');
+    assert.equal(resolved.type, 'success', resolved.text);
+    const detail = await m.get(`/evaluations/${e.id}`);
+    assert.ok(detail.html.includes('이의 제기 정정') && detail.html.includes('웹 정정'));
+  });
+
+  it('감사 기록은 Boss·Administrator만 보고, Administrator는 CSV로 내려받는다', async () => {
+    const b = browser();
+    await b.login('boss');
+    const page = await b.get('/audit-logs?action=USER_ROLE_CHANGED');
+    assert.equal(page.status, 200);
+    assert.ok(page.html.includes('역할 변경'));
+    const logId = page.html.match(/\/audit-logs\/([a-f0-9]{24})/)[1];
+    const detail = await b.get(`/audit-logs/${logId}`);
+    assert.ok(detail.html.includes('변경 전') && detail.html.includes('&#34;role&#34;')); // EJS가 JSON의 따옴표를 이스케이프한다
+    assert.equal((await b.get('/audit-logs/export')).status, 403);
+
+    const a = browser();
+    await a.login('admin');
+    const csv = await a.get('/audit-logs/export?action=USER_CREATED');
+    assert.equal(csv.status, 200);
+    assert.match(csv.type, /text\/csv/);
+    assert.ok(csv.html.includes('USER_CREATED'));
+    assert.ok((await a.get('/audit-logs')).html.includes('권한 거부 기록'));
+
+    const s = browser();
+    await s.login('associate1');
+    assert.equal((await s.get('/audit-logs')).status, 403);
+  });
+});
+
+describe('운영 현황·검색·관리자 화면 (단계 6)', () => {
+  it('운영 현황 대시보드는 Underboss·Boss가 보고, 차트마다 표 보기가 있다', async () => {
+    const b = browser();
+    await b.login('boss');
+    const page = await b.get('/dashboard?days=7&interval=day');
+    assert.equal(page.status, 200);
+    for (const text of ['업무 상태 추이', '자원 상태와 가동률', 'Crew 비교', '구성원 분포', '운영 경고', '관리 활동', '표로 보기', 'Northside']) assert.ok(page.html.includes(text), text);
+    const s = browser();
+    await s.login('soldier1');
+    assert.equal((await s.get('/dashboard')).status, 403);
+    assert.ok(!(await s.get('/me')).html.includes('href="/dashboard"'));
+  });
+
+  it('검색 화면은 권한 범위를 보여 주고, 검색 조건을 저장해 다시 실행한다', async () => {
+    const a = browser();
+    await a.login('associate1');
+    const restricted = await a.get('/search?q=%EA%B0%95%EB%B6%81');
+    assert.equal(restricted.status, 200);
+    assert.ok(restricted.html.includes('구성원 목록을 볼 권한이 없습니다'));
+
+    const user = await makeUser(t, tokens);
+    const u = browser();
+    await u.login(user.username, user.password);
+    const saved = await u.flashAfter('/saved-searches', { name: '웹 저장 검색', q: '강북', types: 'crews' }, '/search?q=%EA%B0%95%EB%B6%81');
+    assert.equal(saved.type, 'success', saved.text);
+    const list = await u.get('/search');
+    const id = list.html.match(/\/saved-searches\/([a-f0-9]{24})"/)[1];
+    const run = await u.get(`/saved-searches/${id}`);
+    assert.ok(run.html.includes("저장 검색 '웹 저장 검색' 실행 결과") && run.html.includes('Northside'));
+  });
+
+  it('관리자 화면은 Administrator만 열고, 계정 잠금·해제가 화면에서 된다 (BR-09)', async () => {
+    const b = browser();
+    await b.login('boss');
+    assert.equal((await b.get('/admin')).status, 403);
+    const denied = await SecurityEvent.findOne({ path: '/admin', 'user.username': 'boss' }).sort({ createdAt: -1 }).lean();
+    assert.ok(denied);
+
+    const target = await makeUser(t, tokens);
+    const a = browser();
+    await a.login('admin');
+    const page = await a.get(`/admin?q=${target.username}`);
+    assert.equal(page.status, 200);
+    for (const text of ['DB 연결 상태', '데이터 무결성 점검', '계정 보안 현황', '역할별 권한', '운영 설정', target.username]) assert.ok(page.html.includes(text), text);
+    assert.equal((await a.flashAfter(`/admin/accounts/${target.id}/lock`, { reason: '웹 잠금' }, '/admin')).type, 'success');
+    const tryLogin = await browser().flashAfter('/login', { username: target.username, password: target.password, next: '/' }, '/login');
+    assert.match(tryLogin.text, /잠긴 계정/);
+    assert.equal((await a.flashAfter(`/admin/accounts/${target.id}/unlock`, {}, '/admin')).type, 'success');
+    await browser().login(target.username, target.password);
+    const reset = await a.flashAfter(`/admin/accounts/${target.id}/password-reset`, {}, '/admin');
+    assert.match(reset.text, /임시 비밀번호: [A-Za-z0-9]{12}/);
+  });
+
+  it('내 정보에 내 요약이, Crew 화면에 소속원별 업무량이 보인다', async () => {
+    const s = browser();
+    await s.login('soldier1');
+    const me = await s.get('/me');
+    assert.ok(me.html.includes('내 요약') && me.html.includes('평판 점수'));
+    const c = browser();
+    await c.login('capo1');
+    const crew = await c.get(`/crews/${seed.Northside.id}`);
+    assert.ok(crew.html.includes('소속원별 업무량'));
+    assert.ok(!crew.html.includes('그 Crew의 책임자와 Underboss·Boss만 볼 수 있습니다.'));
   });
 });

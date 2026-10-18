@@ -1,0 +1,67 @@
+<%- include('partials/head') %>
+<h1>감사 기록 <span class="tag">FR-20 · BR-09 · BR-10</span></h1>
+
+<section class="card">
+  <form method="get" action="/audit-logs" class="form-row">
+    <label>행위
+      <select name="action">
+        <option value="">전체</option>
+        <% Object.entries(actions).forEach(([code, label]) => { %><option value="<%= code %>" <%= query.action === code ? 'selected' : '' %>><%= label %> (<%= code %>)</option><% }) %>
+      </select>
+    </label>
+    <label>대상 유형
+      <select name="targetEntity">
+        <option value="">전체</option>
+        <% [['user', '구성원'], ['crew', 'Crew'], ['task', '업무'], ['resource', '자원'], ['evaluation', '평가'], ['reputationEvent', '공로·징계']].forEach(([v, l]) => { %>
+          <option value="<%= v %>" <%= query.targetEntity === v ? 'selected' : '' %>><%= l %></option>
+        <% }) %>
+      </select>
+    </label>
+    <label>대상 ID <input name="targetId" value="<%= query.targetId || '' %>" size="5"></label>
+    <label>검색 <input name="q" value="<%= query.q || '' %>" placeholder="대상·사유·행위자"></label>
+    <label>시작 <input name="from" type="datetime-local" value="<%= query.from || '' %>"></label>
+    <label>끝 <input name="to" type="datetime-local" value="<%= query.to || '' %>"></label>
+    <label>정렬 <select name="sort"><option value="-createdAt">최근 순</option><option value="createdAt" <%= query.sort === 'createdAt' ? 'selected' : '' %>>오래된 순</option></select></label>
+    <button>검색</button>
+  </form>
+  <% if (can('audit.export')) { %><p><a class="button small" href="/audit-logs/export<%= exportQuery ? '?' + exportQuery : '' %>">검색 결과 CSV 내려받기</a> <span class="hint">최대 5000건</span></p><% } %>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>시각</th><th>행위</th><th>행위자</th><th>대상</th><th>사유</th></tr></thead>
+      <tbody>
+        <% logs.forEach((l) => { %>
+          <tr>
+            <td class="small"><a href="/audit-logs/<%= l.id %>"><%= fmt(l.at) %></a></td>
+            <td><%= l.actionLabel %> <span class="mono small muted"><%= l.action %></span></td>
+            <td class="small"><%= l.actor ? `${l.actor.username} (${l.actor.role})` : '시스템' %></td>
+            <td class="small"><%= l.target.entity %>#<%= l.target.id %> <%= l.target.label || '' %><%= l.related.length ? ' · ' + l.related.map((r) => r.label || `${r.entity}#${r.id}`).join(', ') : '' %></td>
+            <td class="small"><%= l.reason || '' %></td>
+          </tr>
+        <% }) %>
+        <% if (!logs.length) { %><tr><td colspan="5" class="muted">조건에 맞는 기록이 없습니다.</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+  <%- include('partials/pager', { meta }) %>
+  <p class="hint">단계 1부터 모든 상태 변경과 관리 활동이 MongoDB에 쌓인 기록입니다. 시각을 누르면 변경 전후 값을 봅니다.</p>
+</section>
+
+<% if (security) { %>
+  <section class="card">
+    <h2>권한 거부 기록 <span class="tag">BR-09 · NFR-03</span></h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>시각</th><th>사용자</th><th>요청</th><th>이유</th></tr></thead>
+        <tbody>
+          <% security.forEach((e) => { %>
+            <tr><td class="small"><%= fmt(e.at) %></td><td class="small"><%= e.user ? `${e.user.username} (${e.user.role})` : '-' %></td>
+              <td class="mono small"><%= e.method %> <%= e.path %></td><td class="small"><%= e.reason || '' %></td></tr>
+          <% }) %>
+          <% if (!security.length) { %><tr><td colspan="4" class="muted">권한 거부 기록이 없습니다.</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+<% } %>
+<%- include('partials/foot') %>

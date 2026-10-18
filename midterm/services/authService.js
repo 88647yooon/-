@@ -7,6 +7,7 @@ const config = require('../config');
 const userModel = require('../models/sql/userModel');
 const sessionModel = require('../models/sql/sessionModel');
 const auditService = require('./auditService');
+const settings = require('./settingsService');
 const { presentUser, presentSession } = require('./presenters');
 const { SIGN_IN_BLOCKED_STATUSES, MEMBER_STATUS_INFO } = require('../config/constants');
 const { unauthenticated, forbidden } = require('../utils/errors');
@@ -37,6 +38,19 @@ function assertCanSignIn(user) {
   if (block) throw forbidden(block.message, { reason: block.reason });
 }
 
+// FR-23: 연속 실패가 운영 설정의 잠금 기준(loginLockThreshold, 0이면 끔)에 이르면 계정을 잠그고 세션을 끊는다.
+async function lockAfterFailures(user, ctx) {
+  const threshold = await settings.get('loginLockThreshold');
+  const failures = user.failedLoginCount + 1;
+  if (threshold === 0 || user.lockedAt || failures < threshold) return;
+  const reason = `로그인 ${failures}회 연속 실패로 자동 잠금`;
+  await userModel.lock(user.id, reason);
+  await sessionModel.revokeAllForUser(user.id, 'ACCOUNT_LOCKED');
+  await auditService.record({
+    action: 'ACCOUNT_LOCKED', target: auditService.userTarget(user), after: { lockedReason: reason, failedLoginCount: failures }, reason, ip: ctx.ip,
+  });
+}
+
 function issueTokens(user, sessionId, refreshToken, refreshTokenExpiresAt) {
   const ttl = config.auth.accessTokenTtlSeconds;
   const accessToken = jwt.sign({ sid: sessionId }, config.auth.jwtSecret, { subject: String(user.id), expiresIn: ttl });
@@ -52,6 +66,7 @@ async function login({ username, password }, ctx) {
     await auditService.recordLogin({
       user, username, success: false, reason: user ? 'WRONG_PASSWORD' : 'UNKNOWN_USERNAME', ...ctx,
     });
+    if (user) await lockAfterFailures(user, ctx);
     throw unauthenticated(LOGIN_FAILED);
   }
 

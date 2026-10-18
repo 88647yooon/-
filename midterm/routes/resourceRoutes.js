@@ -55,7 +55,7 @@ const windowQuery = { from: fields.optionalDatetime, to: fields.optionalDatetime
  *       - { name: location, in: query, description: 위치 검색어, schema: { type: string, maxLength: 100 } }
  *       - { name: minRole, in: query, schema: { $ref: '#/components/schemas/ResourceMinRole' } }
  *       - { name: assignable, in: query, description: 'true: 정상 자원만, false: 점검중·사용불가 자원만', schema: { type: boolean } }
- *       - { name: q, in: query, description: 이름·관리 번호·설명 검색어, schema: { type: string, maxLength: 50 } }
+ *       - { name: q, in: query, description: 이름·관리 번호·설명·위치 검색어, schema: { type: string, maxLength: 50 } }
  *       - $ref: '#/components/parameters/ResourceSort'
  *       - $ref: '#/components/parameters/Page'
  *       - $ref: '#/components/parameters/Size'

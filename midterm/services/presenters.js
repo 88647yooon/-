@@ -6,7 +6,9 @@ const {
   TASK_STATUS_INFO, TASK_PRIORITY_INFO, ASSIGNEE_ROLE_INFO, ASSIGNMENT_RESPONSE_INFO,
   ASSIGNMENT_RELEASE_REASON_INFO, TASK_OUTCOME_INFO,
   RESOURCE_STATUS_INFO, MAINTENANCE_SOURCE_INFO, MAINTENANCE_RESULT_INFO, RETURN_CONDITION_INFO, RESOURCE_RELEASE_REASON_INFO,
+  EVALUATION_STATUS_INFO, APPEAL_STATUS_INFO, REPUTATION_EVENT_KIND_INFO,
 } = require('../config/constants');
+const { actionLabel } = require('../config/actions');
 
 const labelOf = (info, key) => (key ? info[key].label : null);
 
@@ -498,6 +500,120 @@ function presentScheduleEntry(e, refs) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// 단계 5: 평가·평판·기록 (MongoDB 문서)
+
+// 문서에 저장한 구성원 정보 ({ userId, username, name, role })
+function personBrief(p) {
+  if (!p?.userId) return null;
+  return { id: p.userId, username: p.username, name: p.name, role: p.role ?? null, roleLabel: p.role ? labelOf(ROLE_INFO, p.role) : null };
+}
+
+const presentCriterion = (c) => ({ key: c.key, label: c.label, description: c.description ?? null, weight: c.weight, position: c.position });
+
+const presentScores = (scores) => scores.map((s) => ({ key: s.key, label: s.label, weight: s.weight, score: s.score }));
+
+// viewer: 보는 사람 (수정 가능 여부 계산), detail: 수정·정정 이력까지 보여 줄지
+function presentEvaluation(e, { viewer, detail = false } = {}) {
+  const view = {
+    id: String(e._id),
+    task: { id: e.taskId, title: e.taskTitle, completedAt: e.taskCompletedAt ?? null },
+    crewId: e.crewId ?? null,
+    evaluatee: personBrief(e.evaluatee),
+    evaluator: personBrief(e.evaluator),
+    scores: presentScores(e.scores),
+    totalScore: e.totalScore,
+    comment: e.comment ?? null,
+    status: e.status,
+    statusLabel: labelOf(EVALUATION_STATUS_INFO, e.status),
+    editableUntil: e.editableUntil ?? null,
+    editable: Boolean(viewer) && e.status === 'ACTIVE' && e.evaluator.userId === viewer.id && e.editableUntil > new Date(),
+    revisionCount: e.revisions?.length ?? 0,
+    withdrawnAt: e.withdrawnAt ?? null,
+    withdrawnBy: personBrief(e.withdrawnBy),
+    withdrawReason: e.withdrawReason ?? null,
+    createdAt: e.createdAt,
+    updatedAt: e.updatedAt,
+  };
+  if (detail) {
+    view.revisions = (e.revisions ?? []).map((r) => ({
+      kind: r.kind,
+      kindLabel: r.kind === 'CORRECTION' ? '이의 제기 정정' : '평가자 수정',
+      at: r.at,
+      by: personBrief(r.by),
+      before: { scores: presentScores(r.before.scores), totalScore: r.before.totalScore, comment: r.before.comment ?? null },
+      after: { scores: presentScores(r.after.scores), totalScore: r.after.totalScore, comment: r.after.comment ?? null },
+      reason: r.reason ?? null,
+      appealId: r.appealId ?? null,
+    }));
+  }
+  return view;
+}
+
+function presentAppeal(a) {
+  return {
+    id: String(a._id),
+    evaluationId: String(a.evaluationId),
+    task: { id: a.taskId, title: a.taskTitle },
+    appellant: personBrief(a.appellant),
+    reason: a.reason,
+    status: a.status,
+    statusLabel: labelOf(APPEAL_STATUS_INFO, a.status),
+    resolvedBy: personBrief(a.resolvedBy),
+    resolvedAt: a.resolvedAt ?? null,
+    resolutionNote: a.resolutionNote ?? null,
+    createdAt: a.createdAt,
+  };
+}
+
+function presentReputationEvent(e) {
+  return {
+    id: String(e._id),
+    user: personBrief(e.user),
+    kind: e.kind,
+    kindLabel: labelOf(REPUTATION_EVENT_KIND_INFO, e.kind),
+    points: e.points,
+    title: e.title,
+    description: e.description ?? null,
+    recordedBy: personBrief(e.recordedBy),
+    active: e.status === 'ACTIVE',
+    cancelledBy: personBrief(e.cancelledBy),
+    cancelledAt: e.cancelledAt ?? null,
+    cancelReason: e.cancelReason ?? null,
+    createdAt: e.createdAt,
+  };
+}
+
+// 활동 기록(감사 기록) 한 건. withChanges면 변경 전후 값까지 보여 준다.
+function presentActivityLog(d, { withChanges = true } = {}) {
+  const view = {
+    id: String(d._id),
+    at: d.createdAt,
+    action: d.action,
+    actionLabel: actionLabel(d.action),
+    actor: d.actor?.userId ? { id: d.actor.userId, username: d.actor.username, role: d.actor.role } : null,
+    target: d.target,
+    related: d.related ?? [],
+    reason: d.reason ?? null,
+  };
+  if (withChanges) Object.assign(view, { before: d.before ?? null, after: d.after ?? null, ip: d.ip ?? null });
+  return view;
+}
+
+function presentSecurityEvent(d) {
+  return {
+    id: String(d._id),
+    at: d.createdAt,
+    event: d.event,
+    user: d.user?.userId ? { id: d.user.userId, username: d.user.username, role: d.user.role } : null,
+    method: d.method,
+    path: d.path,
+    reason: d.reason ?? null,
+    details: d.details ?? null,
+    ip: d.ip ?? null,
+  };
+}
+
 function presentSession(session, currentSessionId) {
   return {
     id: session.id,
@@ -544,5 +660,12 @@ module.exports = {
   usageRefIds,
   presentMaintenance,
   presentScheduleEntry,
+  personBrief,
+  presentCriterion,
+  presentEvaluation,
+  presentAppeal,
+  presentReputationEvent,
+  presentActivityLog,
+  presentSecurityEvent,
   presentSession,
 };

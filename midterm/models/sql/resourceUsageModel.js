@@ -109,9 +109,9 @@ async function searchByResource(resourceId, { userId, taskId, open, from, to, so
   return { rows: rows.map(toUsage), total };
 }
 
-// #154 반환 예정 시각이 지난 미반환 사용 (오래 늦은 순)
-async function searchOverdue({ userId, ...paging }, db = getPool()) {
-  const w = where([['returned_at IS NULL AND due_at < NOW()'], userId && ['user_id = ?', userId]]);
+// #154 반환 예정 시각이 지난 미반환 사용 (오래 늦은 순). graceMinutes: 반환 연체 기준 (운영 설정)
+async function searchOverdue({ userId, graceMinutes = 0, ...paging }, db = getPool()) {
+  const w = where([['returned_at IS NULL AND due_at < NOW() - INTERVAL ? MINUTE', graceMinutes], userId && ['user_id = ?', userId]]);
   const [rows] = await db.query(
     `SELECT ${COLUMNS} FROM resource_usages ${w.sql} ORDER BY due_at, id LIMIT ? OFFSET ?`,
     [...w.params, ...limitOffset(paging)],

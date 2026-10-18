@@ -324,6 +324,36 @@
   <% } %>
 </section>
 
+<% if (evaluations) { %>
+  <section class="card" id="evaluations">
+    <h2>참여자 평가 <span class="tag">FR-18 · BR-10</span></h2>
+    <% if (evaluations.ok) { const { list, criteria } = evaluations.value; %>
+      <% if (list.length) { %>
+        <table>
+          <thead><tr><th>대상자</th><th>평가자</th><th>점수</th><th>상태</th></tr></thead>
+          <tbody>
+            <% list.forEach((e) => { %>
+              <tr class="<%= e.status === 'WITHDRAWN' ? 'dim' : '' %>"><td><a href="/evaluations/<%= e.id %>"><%= e.evaluatee.name %></a></td><td class="small"><%= e.evaluator.name %></td>
+                <td><strong><%= e.totalScore %></strong></td><td><span class="badge"><%= e.statusLabel %></span></td></tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } else { %><p class="muted">작성된 평가가 없습니다.</p><% } %>
+      <% const mineDone = new Set(list.filter((e) => e.status === 'ACTIVE' && e.evaluator.id === me.id).map((e) => e.evaluatee.id)); %>
+      <% participations.filter((p) => p.participated && p.user.id !== me.id && !mineDone.has(p.user.id)).forEach((p) => { %>
+        <form method="post" action="/tasks/<%= task.id %>/evaluations" class="form-row">
+          <input type="hidden" name="evaluateeId" value="<%= p.user.id %>">
+          <span><strong><%= p.user.name %></strong></span>
+          <% criteria.forEach((c) => { %><label><%= c.label %>(×<%= c.weight %>) <select name="score_<%= c.key %>"><% [5, 4, 3, 2, 1].forEach((n) => { %><option><%= n %></option><% }) %></select></label><% }) %>
+          <input name="comment" maxlength="1000" placeholder="의견">
+          <button class="small">평가</button>
+        </form>
+      <% }) %>
+      <p class="hint">실제로 참여한 구성원만 평가합니다. 평가자당 대상 1회이며, 작성 후 7일 안에 평가 화면에서 고칠 수 있습니다.</p>
+    <% } else { %><p class="denied"><%= evaluations.message %></p><% } %>
+  </section>
+<% } %>
+
 <% if (manager && open) { %>
   <section class="card">
     <h2>업무 관리 <span class="tag">FR-07 · FR-10</span></h2>

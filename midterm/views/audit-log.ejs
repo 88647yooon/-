@@ -1,0 +1,20 @@
+<%- include('partials/head') %>
+<h1>감사 기록 상세 <span class="tag">FR-20</span></h1>
+<p class="muted"><a href="/audit-logs">감사 기록 목록</a></p>
+
+<section class="card">
+  <dl class="facts">
+    <dt>시각</dt><dd><%= fmt(log.at) %></dd>
+    <dt>행위</dt><dd><%= log.actionLabel %> <span class="mono small muted"><%= log.action %></span></dd>
+    <dt>행위자</dt><dd><%= log.actor ? `${log.actor.username} (${log.actor.role})` : '시스템' %></dd>
+    <dt>대상</dt><dd><%= log.target.entity %>#<%= log.target.id %> <%= log.target.label || '' %></dd>
+    <dt>관련 대상</dt><dd><%= log.related.length ? log.related.map((r) => `${r.entity}#${r.id} ${r.label || ''}`).join(', ') : '-' %></dd>
+    <dt>사유</dt><dd><%= log.reason || '-' %></dd>
+    <dt>IP</dt><dd class="mono small"><%= log.ip || '-' %></dd>
+  </dl>
+  <div class="cols">
+    <div><h3>변경 전</h3><pre class="mono small"><%= log.before ? JSON.stringify(log.before, null, 2) : '-' %></pre></div>
+    <div><h3>변경 후</h3><pre class="mono small"><%= log.after ? JSON.stringify(log.after, null, 2) : '-' %></pre></div>
+  </div>
+</section>
+<%- include('partials/foot') %>

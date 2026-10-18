@@ -14,12 +14,17 @@
       <a href="/" class="<%= path === '/' ? 'on' : '' %>">홈</a>
       <% if (me) { %>
         <a href="/me" class="<%= path === '/me' ? 'on' : '' %>">내 정보</a>
+        <a href="/search" class="<%= path.startsWith('/search') || path.startsWith('/saved-searches') ? 'on' : '' %>">검색</a>
+        <% if (can('stats.read')) { %><a href="/dashboard" class="<%= path === '/dashboard' ? 'on' : '' %>">운영 현황</a><% } %>
         <% if (can('user.list')) { %><a href="/users" class="<%= path.startsWith('/users') ? 'on' : '' %>">구성원</a><% } %>
         <a href="/crews" class="<%= path.startsWith('/crews') ? 'on' : '' %>">Crew</a>
         <% if (can('task.list')) { %><a href="/tasks" class="<%= path.startsWith('/tasks') ? 'on' : '' %>">업무</a><% } %>
         <% if (can('task.participate')) { %><a href="/my-tasks" class="<%= path === '/my-tasks' ? 'on' : '' %>">내 업무</a><% } %>
         <% if (can('resource.read')) { %><a href="/resources" class="<%= path.startsWith('/resources') ? 'on' : '' %>">자원</a><% } %>
         <% if (can('resource.use')) { %><a href="/my-resources" class="<%= path === '/my-resources' ? 'on' : '' %>">내 자원</a><% } %>
+        <% if (can('evaluation.appeal')) { %><a href="/evaluations" class="<%= path.startsWith('/evaluations') ? 'on' : '' %>">평가</a><% } %>
+        <% if (can('audit.read')) { %><a href="/audit-logs" class="<%= path.startsWith('/audit-logs') ? 'on' : '' %>">감사 기록</a><% } %>
+        <% if (can('admin.accounts')) { %><a href="/admin" class="<%= path.startsWith('/admin') ? 'on' : '' %>">관리자</a><% } %>
         <% if (can('roleRequest.read')) { %><a href="/role-requests" class="<%= path.startsWith('/role-requests') ? 'on' : '' %>">역할 변경 요청</a><% } %>
       <% } %>
       <a href="/api-docs">API 문서(Swagger)</a>

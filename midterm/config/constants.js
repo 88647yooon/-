@@ -170,7 +170,58 @@ const RESOURCE_RELEASE_REASON_INFO = Object.freeze({
   WITHDRAWN: { label: '구성원 탈퇴' },
 });
 
+// ---------------------------------------------------------------------------
+// 단계 5: 평가·기록
+
+// FR-18 평가 점수 범위(항목마다 정수)와 평가 일정
+const EVALUATION_SCORE = Object.freeze({ min: 1, max: 5 });
+const EVALUATION_WINDOW_DAYS = 30; // 업무 완료 후 이 기간 안에 평가한다
+const EVALUATION_EDIT_DAYS = 7; // 평가자는 작성 후 이 기간 안에만 고칠 수 있다
+
+const EVALUATION_STATUS_INFO = Object.freeze({
+  ACTIVE: { label: '유효' },
+  WITHDRAWN: { label: '철회' },
+});
+
+// 이의 제기 처리 상태
+const APPEAL_STATUS_INFO = Object.freeze({
+  PENDING: { label: '처리 대기' },
+  DISMISSED: { label: '기각' },
+  CORRECTED: { label: '평가 정정' },
+});
+
+// 업무 밖 공로·징계. 점수는 공로면 +, 징계면 -로 반영한다 (1~10점).
+const REPUTATION_EVENT_KIND_INFO = Object.freeze({
+  MERIT: { label: '공로', sign: 1 },
+  DISCIPLINE: { label: '징계', sign: -1 },
+});
+const REPUTATION_POINTS = Object.freeze({ min: 1, max: 10 });
+
+// 평판 점수 = 평균 평가 점수 × 20 + 공로·징계 점수 합계 (0~100). 평가가 없으면 평가 부분은 50으로 본다.
+const REPUTATION_BASE_WITHOUT_EVALUATION = 50;
+
+// BR-10 구성원 변경 이력의 유형과 활동 기록 행위 코드
+const CHANGE_TYPE_INFO = Object.freeze({
+  ACCOUNT: { label: '계정', actions: ['USER_CREATED'] },
+  ROLE: { label: '역할', actions: ['USER_ROLE_CHANGED'] },
+  STATUS: { label: '상태', actions: ['USER_STATUS_CHANGED'] },
+  MEMBERSHIP: { label: '소속', actions: ['MEMBERSHIP_ADDED', 'MEMBERSHIP_ENDED', 'MEMBERSHIP_TRANSFERRED', 'MEMBERSHIP_TYPE_CHANGED'] },
+  EVALUATION: {
+    label: '평가',
+    actions: ['EVALUATION_CREATED', 'EVALUATION_UPDATED', 'EVALUATION_CORRECTED', 'EVALUATION_WITHDRAWN', 'REPUTATION_EVENT_RECORDED', 'REPUTATION_EVENT_CANCELLED'],
+  },
+});
+
 module.exports = {
+  EVALUATION_SCORE,
+  EVALUATION_WINDOW_DAYS,
+  EVALUATION_EDIT_DAYS,
+  EVALUATION_STATUS_INFO,
+  APPEAL_STATUS_INFO,
+  REPUTATION_EVENT_KIND_INFO,
+  REPUTATION_POINTS,
+  REPUTATION_BASE_WITHOUT_EVALUATION,
+  CHANGE_TYPE_INFO,
   RESOURCE_STATUS_INFO,
   MANUAL_RESOURCE_STATUSES,
   RESOURCE_MIN_ROLES,

@@ -15,7 +15,10 @@ router.use('/swap-requests', require('./swapRoutes'));
 router.use('/resource-categories', require('./resourceCategoryRoutes'));
 router.use('/resources', require('./resourceRoutes'));
 router.use('/resource-requests', require('./resourceRequestRoutes'));
-// 여러 경로(/resources/..., /users/..., /maintenances, /resource-allocations, /resource-usages)에 걸친 라우터는 /api에 바로 붙인다.
+router.use('/admin', require('./adminRoutes'));
+// 여러 경로에 걸친 라우터(자원 점검·배정·사용, 이력, 평가, 평판, 감사 기록, 검색, 통계)는 /api에 바로 붙인다.
 router.use(require('./maintenanceRoutes'), require('./resourceAllocationRoutes'), require('./resourceUsageRoutes'));
+router.use(require('./historyRoutes'), require('./evaluationRoutes'), require('./reputationRoutes'), require('./auditRoutes'));
+router.use(require('./searchRoutes'), require('./statsRoutes'));
 
 module.exports = router;

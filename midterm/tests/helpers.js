@@ -49,7 +49,7 @@ async function startServer() {
 }
 
 // 지금까지 구현을 마친 작업지시서 단계. 문서 테스트는 목록표의 이 단계까지와 Swagger를 대조한다.
-const IMPLEMENTED_STEP = 4;
+const IMPLEMENTED_STEP = 6;
 
 // 테스트 실행마다 겹치지 않는 이름 (아이디 규칙: 영문 소문자·숫자·. _ -)
 let seq = 0;

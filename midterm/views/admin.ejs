@@ -1,0 +1,130 @@
+<%- include('partials/head') %>
+<h1>관리자 <span class="tag">FR-23 · NFR-03 · BR-09</span></h1>
+<p class="muted">Administrator만 들어올 수 있습니다. 다른 계정이 주소로 직접 들어오면 403 화면이 나오고 권한 거부 기록이 남습니다.</p>
+
+<div class="cols">
+  <section class="card">
+    <h2>DB 연결 상태 <span class="tag">NFR-02 · #210</span></h2>
+    <p><span class="badge <%= health.status === 'ok' ? 'ok' : 'bad' %>"><%= health.status === 'ok' ? '✓ 정상' : '✕ 문제 있음' %></span></p>
+    <dl class="facts">
+      <dt>MySQL</dt><dd><%= health.mysql.ok ? `연결됨 · ${health.mysql.latencyMs}ms` : `오류: ${health.mysql.error}` %> <span class="mono small muted"><%= health.mysql.database %></span></dd>
+      <dt>MongoDB</dt><dd><%= health.mongodb.ok ? `연결됨 · ${health.mongodb.latencyMs}ms` : `오류: ${health.mongodb.error}` %> <span class="mono small muted"><%= health.mongodb.database %></span></dd>
+      <dt>가동 시간</dt><dd><%= Math.floor(health.uptimeSeconds / 60) %>분 · Node.js <%= health.node %></dd>
+    </dl>
+  </section>
+  <section class="card">
+    <h2>데이터 무결성 점검 <span class="tag">DR-01 · #209</span></h2>
+    <p><span class="badge <%= integrity.ok ? 'ok' : 'bad' %>"><%= integrity.ok ? '✓ 모든 규칙 정상' : '✕ 규칙이 깨진 데이터 있음' %></span> <span class="muted small"><%= fmt(integrity.checkedAt) %></span></p>
+    <ul class="small">
+      <% integrity.checks.forEach((c) => { %>
+        <li><span class="badge code"><%= c.rule %></span> <%= c.label %>: <strong><%= c.count %>건</strong>
+          <% if (c.count) { %><br><span class="mono muted"><%= JSON.stringify(c.items.slice(0, 3)) %></span><% } %></li>
+      <% }) %>
+    </ul>
+  </section>
+</div>
+
+<section class="card">
+  <h2>계정 보안 현황 <span class="tag">FR-23 · #199~#203</span></h2>
+  <form method="get" action="/admin" class="form-row">
+    <input name="q" value="<%= query.q || '' %>" placeholder="이름·아이디">
+    <label class="small"><input type="checkbox" name="locked" value="true" <%= query.locked ? 'checked' : '' %>> 잠긴 계정만</label>
+    <label>정렬
+      <select name="sort"><% [['username', '아이디순'], ['-lastLoginAt', '최근 로그인순'], ['-failedLoginCount', '로그인 실패 많은 순']].forEach(([v, l]) => { %><option value="<%= v %>" <%= query.sort === v ? 'selected' : '' %>><%= l %></option><% }) %></select>
+    </label>
+    <button>조회</button>
+  </form>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>계정</th><th>역할·상태</th><th>마지막 로그인</th><th>실패</th><th>세션</th><th>잠금</th><th>관리</th></tr></thead>
+      <tbody>
+        <% accounts.forEach((a) => { %>
+          <tr>
+            <td><a href="/users/<%= a.id %>"><%= a.name %></a> <span class="muted small">@<%= a.username %></span></td>
+            <td class="small"><%= a.roleLabel %> · <%= a.statusLabel %></td>
+            <td class="small"><%= fmt(a.lastLoginAt) %></td>
+            <td class="mono"><%= a.failedLoginCount %></td>
+            <td class="mono"><%= a.activeSessionCount %></td>
+            <td class="small"><% if (a.locked) { %><span class="badge bad">✕ 잠김</span> <%= a.lockedReason %><% } else { %>-<% } %></td>
+            <td>
+              <% if (a.id !== me.id) { %>
+                <% if (a.locked) { %>
+                  <form method="post" action="/admin/accounts/<%= a.id %>/unlock"><button class="small">잠금 해제</button></form>
+                <% } else { %>
+                  <form method="post" action="/admin/accounts/<%= a.id %>/lock"><input name="reason" required placeholder="잠금 사유" size="8"><button class="ghost small">잠금</button></form>
+                <% } %>
+                <form method="post" action="/admin/accounts/<%= a.id %>/password-reset"><button class="ghost small">임시 비밀번호</button></form>
+                <% if (a.activeSessionCount) { %><form method="post" action="/admin/accounts/<%= a.id %>/sessions"><button class="ghost small">강제 로그아웃</button></form><% } %>
+              <% } else { %><span class="muted small">본인</span><% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <%- include('partials/pager', { meta }) %>
+  <p class="hint">잠그면 로그인이 막히고 모든 세션이 끊깁니다. 연속 로그인 실패가 잠금 기준(운영 설정)에 이르면 자동으로 잠깁니다. 임시 비밀번호는 다음 화면에 한 번만 보입니다.</p>
+</section>
+
+<section class="card">
+  <h2>최근 로그인 이력 <span class="tag">#204</span></h2>
+  <p><a class="small" href="/admin?loginFailed=true#history">실패만 보기</a> · <a class="small" href="/admin#history">전체</a></p>
+  <table id="history">
+    <thead><tr><th>시각</th><th>아이디</th><th>결과</th><th>이유</th><th>IP</th></tr></thead>
+    <tbody>
+      <% history.forEach((h) => { %>
+        <tr><td class="small"><%= fmt(h.at) %></td><td class="mono small"><%= h.username %></td>
+          <td><span class="badge <%= h.success ? 'ok' : 'bad' %>"><%= h.success ? '✓ 성공' : '✕ 실패' %></span></td>
+          <td class="mono small"><%= h.reason || '' %></td><td class="mono small"><%= h.ip || '' %></td></tr>
+      <% }) %>
+    </tbody>
+  </table>
+</section>
+
+<section class="card" id="permissions">
+  <h2>역할별 권한 <span class="tag">FR-23 · NFR-03 · #205·#206</span></h2>
+  <p class="form-row">
+    <% permissions.roles.forEach((r) => { %><a class="button small <%= editRole === r.role ? '' : 'ghost' %>" href="/admin?role=<%= r.role %>#permissions"><%= r.label %></a><% }) %>
+  </p>
+  <form method="post" action="/admin/permissions/<%= editRole %>">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>허용</th><th>권한 키</th><th>설명</th><th>기본값</th></tr></thead>
+        <tbody>
+          <% permissions.permissions.forEach((p) => { const s = p.roles[editRole]; %>
+            <tr class="<%= s.overridden ? '' : '' %>">
+              <td><input type="checkbox" name="perm_<%= p.key %>" <%= s.allowed ? 'checked' : '' %> <%= editRole === 'ADMIN' && p.key === 'admin.permissions' ? 'disabled' : '' %>>
+                <% if (editRole === 'ADMIN' && p.key === 'admin.permissions') { %><input type="hidden" name="perm_<%= p.key %>" value="on"><% } %></td>
+              <td class="mono small"><%= p.key %></td>
+              <td class="small"><%= p.description %></td>
+              <td class="small"><%= s.default ? '허용' : '-' %><%= s.overridden ? ' · 바뀜' : '' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <div class="form-row"><input name="reason" maxlength="500" placeholder="바꾸는 이유"><button><%= roleInfo[editRole].label %> 권한 저장</button></div>
+    <p class="hint">저장하면 모든 권한 검사에 바로 반영됩니다. 기본값으로 되돌리려면 기본값이 '허용'인 것만 체크해 저장하세요. 관리 범위(BR-05)·역할 순위(BR-04) 검사는 그대로 적용됩니다.</p>
+  </form>
+</section>
+
+<section class="card" id="settings">
+  <h2>운영 설정 <span class="tag">FR-23 · #207·#208</span></h2>
+  <form method="post" action="/admin/settings">
+    <table>
+      <thead><tr><th>항목</th><th>값</th><th>설명</th><th>기본값</th></tr></thead>
+      <tbody>
+        <% settings.forEach((s) => { %>
+          <tr>
+            <td><%= s.label %></td>
+            <td><input name="set_<%= s.key %>" type="number" min="<%= s.min %>" max="<%= s.max %>" value="<%= s.value %>" size="4"> <%= s.unit %></td>
+            <td class="small"><%= s.description %></td>
+            <td class="small"><%= s.default %><%= s.unit %><%= s.updatedAt ? ` · ${fmt(s.updatedAt)} 변경` : '' %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <div class="form-row"><input name="reason" maxlength="500" placeholder="바꾸는 이유"><button>설정 저장</button></div>
+  </form>
+</section>
+<%- include('partials/foot') %>

@@ -22,13 +22,27 @@ const resourceUsageModel = require('./sql/resourceUsageModel');
 const maintenanceModel = require('./sql/maintenanceModel');
 const resourceRequestModel = require('./sql/resourceRequestModel');
 const ActivityLog = require('./mongo/ActivityLog');
+const EvaluationCriterion = require('./mongo/EvaluationCriterion');
+const Evaluation = require('./mongo/Evaluation');
+const EvaluationAppeal = require('./mongo/EvaluationAppeal');
+const ReputationEvent = require('./mongo/ReputationEvent');
 const TaskProgress = require('./mongo/TaskProgress');
 const seedData = require('./seedData');
 
+const SEED_REASON = '시드 데이터';
+const actorOf = (u) => (u ? { userId: u.id, username: u.username, role: u.role } : undefined);
+const userRef = (u) => ({ entity: 'user', id: String(u.id), label: u.username });
+
+// 시드 계정과 계정 등록 기록 (구성원 변경 이력의 시작점)
 async function seedUsers() {
   if ((await userModel.count()) > 0) return 0;
   const passwordHash = await bcrypt.hash(config.seedPassword, config.auth.bcryptRounds);
-  return userModel.insertMany(seedData.users.map((u) => ({ ...u, passwordHash })));
+  const count = await userModel.insertMany(seedData.users.map((u) => ({ ...u, passwordHash })));
+  const users = await userModel.findByUsernames(seedData.users.map((u) => u.username));
+  await ActivityLog.insertMany(users.map((u) => ({
+    action: 'USER_CREATED', target: userRef(u), after: { username: u.username, name: u.name, role: u.role, status: u.status }, reason: SEED_REASON,
+  })));
+  return count;
 }
 
 // Crew, 소속, 책임자 임기, 대기 중인 소속 신청·역할 변경 요청
@@ -37,14 +51,22 @@ async function seedCrews() {
   const users = await userModel.findByUsernames(seedData.users.map((u) => u.username));
   const byName = new Map(users.map((u) => [u.username, u]));
   const boss = byName.get('boss');
+  const logs = [];
 
-  return withTransaction(async (conn) => {
+  const count = await withTransaction(async (conn) => {
     for (const c of seedData.crews) {
       const crewId = await crewModel.insert({
         name: c.name, region: c.region, description: c.description, underbossId: byName.get(c.underboss).id, createdBy: boss.id,
       }, conn);
+      const crewRef = { entity: 'crew', id: String(crewId), label: c.name };
+      logs.push({ action: 'CREW_CREATED', actor: actorOf(boss), target: crewRef, after: { name: c.name, region: c.region }, reason: SEED_REASON });
       for (const [username, type] of c.members) {
-        await membershipModel.insert({ crewId, userId: byName.get(username).id, type, addedBy: boss.id, note: '초기 편성' }, conn);
+        const user = byName.get(username);
+        await membershipModel.insert({ crewId, userId: user.id, type, addedBy: boss.id, note: '초기 편성' }, conn);
+        logs.push({
+          action: 'MEMBERSHIP_ADDED', actor: actorOf(boss), target: userRef(user), related: [crewRef],
+          after: { crewId, type, joinMethod: 'ADDED' }, reason: SEED_REASON,
+        });
       }
       const capo = byName.get(c.capo);
       await crewModel.setCapo(crewId, capo.id, conn);
@@ -62,6 +84,8 @@ async function seedCrews() {
     }
     return seedData.crews.length;
   });
+  await ActivityLog.insertMany(logs);
+  return count;
 }
 
 // 시드 일정 → 실제 시각. { day, hour }는 오늘(KST) 기준, { hoursFromNow }는 지금 기준이다.
@@ -160,7 +184,6 @@ async function seedResources() {
   const now = new Date();
   const users = new Map((await userModel.findByUsernames(seedData.users.map((u) => u.username))).map((u) => [u.username, u]));
   const logs = [];
-  const actorOf = (u) => ({ userId: u.id, username: u.username, role: u.role });
   const target = (r) => ({ entity: 'resource', id: String(r.id), label: `${r.code} ${r.name}` });
   const log = (actor, action, r, extra) => logs.push({ action, actor: actorOf(actor), target: target(r), reason: '시드 데이터', ...extra });
   const statusLog = (actor, r, from, to, cause, reason = '시드 데이터') =>
@@ -247,13 +270,66 @@ async function seedResources() {
   return seedData.resources.length;
 }
 
+// 평가 항목
+async function seedEvaluationCriteria() {
+  if ((await EvaluationCriterion.countDocuments()) > 0) return 0;
+  await EvaluationCriterion.insertMany(seedData.evaluationCriteria.map((c, position) => ({ ...c, position, active: true })));
+  return seedData.evaluationCriteria.length;
+}
+
+// 완료된 업무의 평가·이의 제기와 공로·징계 기록, 그리고 그 활동 기록. 업무는 제목으로 찾는다.
+async function seedEvaluations() {
+  if ((await Evaluation.countDocuments()) > 0) return 0;
+  const users = new Map((await userModel.findByUsernames(seedData.users.map((u) => u.username))).map((u) => [u.username, u]));
+  const person = (u) => ({ userId: u.id, username: u.username, name: u.name, role: u.role });
+  const criteria = await EvaluationCriterion.find({ active: true }).sort({ position: 1 }).lean();
+  const weightSum = criteria.reduce((sum, c) => sum + c.weight, 0);
+  const logs = [];
+  let count = 0;
+
+  for (const e of seedData.evaluations) {
+    const title = seedData.tasks.find((t) => t.key === e.task).title;
+    const [task] = (await taskModel.search({ q: title, status: 'COMPLETED', page: 1, size: 1 })).rows;
+    if (!task) continue;
+    const scores = criteria.map((c) => ({ key: c.key, label: c.label, weight: c.weight, score: e.scores[c.key] }));
+    const totalScore = Math.round((scores.reduce((sum, x) => sum + x.score * x.weight, 0) / weightSum) * 100) / 100;
+    const [evaluator, evaluatee] = [users.get(e.evaluator), users.get(e.evaluatee)];
+    const doc = await Evaluation.create({
+      taskId: task.id, taskTitle: task.title, crewId: task.crewId, taskCompletedAt: task.completedAt,
+      evaluatee: person(evaluatee), evaluator: person(evaluator), scores, totalScore, comment: e.comment,
+      editableUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+    const target = { entity: 'evaluation', id: String(doc._id), label: `${task.title} · ${evaluatee.username}` };
+    const related = [userRef(evaluatee), { entity: 'task', id: String(task.id), label: task.title }];
+    logs.push({ action: 'EVALUATION_CREATED', actor: actorOf(evaluator), target, related, after: { totalScore }, reason: SEED_REASON });
+    if (e.appeal) {
+      const appeal = await EvaluationAppeal.create({ evaluationId: doc._id, taskId: task.id, taskTitle: task.title, appellant: person(evaluatee), reason: e.appeal });
+      logs.push({ action: 'EVALUATION_APPEALED', actor: actorOf(evaluatee), target, related, after: { appealId: String(appeal._id) }, reason: e.appeal });
+    }
+    count += 1;
+  }
+  for (const r of seedData.reputationEvents) {
+    const [user, by] = [users.get(r.user), users.get(r.by)];
+    const points = (r.kind === 'MERIT' ? 1 : -1) * r.points;
+    const doc = await ReputationEvent.create({ user: person(user), kind: r.kind, points, title: r.title, description: r.description, recordedBy: person(by) });
+    logs.push({
+      action: 'REPUTATION_EVENT_RECORDED', actor: actorOf(by), target: { entity: 'reputationEvent', id: String(doc._id), label: `${user.username} ${r.title}` },
+      related: [userRef(user)], after: { kind: r.kind, points, title: r.title }, reason: r.description,
+    });
+  }
+  await ActivityLog.insertMany(logs);
+  return count;
+}
+
 async function seed() {
   const users = await seedUsers();
   const crews = await seedCrews();
   const taskTypes = await seedTaskTypes();
   const tasks = await seedTasks();
   const resources = await seedResources();
-  return { users, crews, taskTypes, tasks, resources };
+  const criteria = await seedEvaluationCriteria();
+  const evaluations = await seedEvaluations();
+  return { users, crews, taskTypes, tasks, resources, criteria, evaluations };
 }
 
 module.exports = { seed };

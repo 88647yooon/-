@@ -53,6 +53,11 @@ async function findByIds(ids, db = getPool()) {
   return rows.map(toTask);
 }
 
+async function listIdsByCrew(crewId, db = getPool()) {
+  const [rows] = await db.query('SELECT id FROM tasks WHERE crew_id = ?', [crewId]);
+  return rows.map((r) => r.id);
+}
+
 async function count(db = getPool()) {
   const [[row]] = await db.query('SELECT COUNT(*) AS cnt FROM tasks');
   return row.cnt;
@@ -143,6 +148,7 @@ async function search({ scopeCrewId, crewId, typeId, status, priority, assigneeI
 module.exports = {
   findById,
   findByIds,
+  listIdsByCrew,
   count,
   insert,
   update,

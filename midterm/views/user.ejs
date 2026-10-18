@@ -99,6 +99,107 @@
   <% } else { %><p class="denied"><%= memberships.message %></p><% } %>
 </section>
 
+<div class="cols">
+  <section class="card">
+    <h2>평판 <span class="tag">FR-18 · FR-19</span></h2>
+    <% if (reputation.ok) { const r = reputation.value; %>
+      <p><span class="big"><%= r.reputationScore %></span> / 100
+        <span class="muted small">· 유효 평가 <%= r.evaluations.count %>건, 평균 <%= r.evaluations.averageScore ?? '-' %>점 · 공로·징계 <%= r.events.points > 0 ? '+' : '' %><%= r.events.points %>점</span></p>
+      <% if (r.criteria.length) { %>
+        <p class="small">항목별 평균: <%= r.criteria.map((c) => `${c.label} ${c.averageScore}`).join(', ') %></p>
+      <% } %>
+      <% if (r.trend.length) { %>
+        <p class="small">월별 추세: <%= r.trend.map((m) => `${m.month} ${m.averageScore}점(${m.count})`).join(' · ') %></p>
+      <% } %>
+      <p class="hint"><%= r.formula %></p>
+    <% } else { %><p class="denied"><%= reputation.message %></p><% } %>
+
+    <h3>공로·징계 <span class="tag">FR-18 · BR-10</span></h3>
+    <% if (events.ok) { %>
+      <% if (events.value.data.length) { %>
+        <ul>
+          <% events.value.data.forEach((ev) => { %>
+            <li class="<%= ev.active ? '' : 'muted' %>"><span class="badge <%= ev.points > 0 ? 'ok' : 'bad' %>"><%= ev.kindLabel %> <%= ev.points > 0 ? '+' : '' %><%= ev.points %></span>
+              <%= ev.title %> <span class="small muted">— <%= ev.recordedBy ? ev.recordedBy.name : '' %>, <%= fmt(ev.createdAt) %></span>
+              <% if (!ev.active) { %><span class="small">· 취소됨: <%= ev.cancelReason %></span><% } %>
+              <% if (ev.active && can('reputation.record')) { %>
+                <form method="post" action="/reputation-events/<%= ev.id %>/cancel"><input name="reason" required placeholder="취소 사유" size="10"><button class="ghost small">취소</button></form>
+              <% } %>
+            </li>
+          <% }) %>
+        </ul>
+      <% } else { %><p class="muted">공로·징계 기록이 없습니다.</p><% } %>
+    <% } else { %><p class="denied"><%= events.message %></p><% } %>
+    <% if (can('reputation.record') && me.id !== user.id) { %>
+      <form method="post" action="/users/<%= user.id %>/reputation-events" class="form-row">
+        <select name="kind"><% Object.entries(C.REPUTATION_EVENT_KIND_INFO).forEach(([key, info]) => { %><option value="<%= key %>"><%= info.label %></option><% }) %></select>
+        <input name="points" type="number" min="1" max="10" value="1" size="3" required>
+        <input name="title" required maxlength="100" placeholder="제목">
+        <input name="description" maxlength="500" placeholder="내용">
+        <button class="small">기록</button>
+      </form>
+      <p class="hint">자신과 같거나 높은 역할의 구성원에게는 기록할 수 없습니다(BR-04).</p>
+    <% } %>
+  </section>
+
+  <section class="card" id="evaluations">
+    <h2>받은 평가 <span class="tag">FR-19</span></h2>
+    <% if (evaluations.ok) { %>
+      <% if (evaluations.value.data.length) { %>
+        <table>
+          <thead><tr><th>업무</th><th>점수</th><th>평가자</th><th>작성</th></tr></thead>
+          <tbody>
+            <% evaluations.value.data.forEach((e) => { %>
+              <tr class="<%= e.status === 'WITHDRAWN' ? 'dim' : '' %>">
+                <td><a href="/evaluations/<%= e.id %>"><%= e.task.title %></a><%= e.status === 'WITHDRAWN' ? ' (철회)' : '' %></td>
+                <td><strong><%= e.totalScore %></strong><%= e.revisionCount ? ` · 수정 ${e.revisionCount}` : '' %></td>
+                <td class="small"><%= e.evaluator.name %></td>
+                <td class="small"><%= fmt(e.createdAt) %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+        <% if (me.id === user.id) { %><p class="hint">평가를 누르면 항목별 점수와 수정 이력을 보고 이의를 제기할 수 있습니다.</p><% } %>
+      <% } else { %><p class="muted">받은 평가가 없습니다.</p><% } %>
+    <% } else { %><p class="denied"><%= evaluations.message %></p><% } %>
+  </section>
+</div>
+
+<section class="card">
+  <h2>변경 이력 (시간순) <span class="tag">FR-19 · BR-10</span></h2>
+  <% if (changes.ok) { %>
+    <% if (changes.value.data.length) { %>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>시각</th><th>유형</th><th>내용</th><th>처리자</th><th>사유</th></tr></thead>
+          <tbody>
+            <% changes.value.data.forEach((h) => { %>
+              <tr><td class="small"><%= fmt(h.at) %></td><td><span class="badge"><%= h.typeLabel %></span></td><td><%= h.summary %></td>
+                <td class="small"><%= h.actor ? h.actor.username : '시스템' %></td><td class="small"><%= h.reason || '' %></td></tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+      <p class="hint">역할·상태·소속·평가(공로·징계 포함)가 바뀔 때마다 MongoDB 활동 기록에 남은 내용입니다.</p>
+    <% } else { %><p class="muted">변경 이력이 없습니다.</p><% } %>
+  <% } else { %><p class="denied"><%= changes.message %></p><% } %>
+</section>
+
+<section class="card">
+  <h2>활동 <span class="tag">FR-19</span></h2>
+  <% if (activity.ok) { %>
+    <% if (activity.value.data.length) { %>
+      <ul>
+        <% activity.value.data.forEach((i) => { %>
+          <li><span class="small muted"><%= fmt(i.at) %></span> <span class="badge"><%= i.typeLabel %></span>
+            <% if (i.evaluationId) { %><a href="/evaluations/<%= i.evaluationId %>"><%= i.summary %></a><% } else if (i.task && i.kind === 'TASK') { %><a href="/tasks/<%= i.task.id %>"><%= i.summary %></a><% } else { %><%= i.summary %><% } %></li>
+        <% }) %>
+      </ul>
+      <p class="hint">업무 배정·참여와 자원 사용은 SQL에서, 받은 평가와 공로·징계는 MongoDB에서 모은 최근 30건입니다.</p>
+    <% } else { %><p class="muted">활동 기록이 없습니다.</p><% } %>
+  <% } else { %><p class="denied"><%= activity.message %></p><% } %>
+</section>
+
 <% const manage = can('user.update') || can('user.role.change') || can('user.status.change') || can('roleRequest.create') || can('user.delete'); %>
 <% if (manage && me.id !== user.id) { %>
   <section class="card">

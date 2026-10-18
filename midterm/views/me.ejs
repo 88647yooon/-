@@ -1,5 +1,21 @@
 <%- include('partials/head') %>
 <h1>내 정보</h1>
+<% if (summary.ok && profile.role !== 'ADMIN') { const d = summary.value; %>
+  <section class="card">
+    <h2>내 요약 <span class="tag">FR-02 · FR-09 · #198</span></h2>
+    <div class="stat-row">
+      <div class="stat"><div class="label">끝나지 않은 내 업무</div><div class="value"><%= d.tasks.openCount %></div><div class="sub">진행 <%= d.tasks.inProgressCount %>건 · <a href="/my-tasks">내 업무</a></div></div>
+      <div class="stat"><div class="label">사용 중인 자원</div><div class="value"><%= d.resources.inUse.length %></div><div class="sub">예정 배정 <%= d.resources.upcomingAllocations.length %>건 · <a href="/my-resources">내 자원</a></div></div>
+      <div class="stat"><div class="label">평판 점수</div><div class="value"><%= d.evaluations.reputationScore ?? '-' %></div><div class="sub">최근 평가 <%= d.evaluations.recent.map((e) => e.totalScore).join(', ') || '없음' %></div></div>
+      <div class="stat"><div class="label">내가 처리할 일</div>
+        <div class="value"><%= d.todo.awaitingMyResponse + d.todo.swapRequestsToMe + (d.todo.evaluationsToWrite || 0) + (d.todo.appealsToResolve || 0) %></div>
+        <div class="sub">배정 응답 <%= d.todo.awaitingMyResponse %> · 교대 요청 <%= d.todo.swapRequestsToMe %><%= d.todo.evaluationsToWrite !== undefined ? ` · 작성할 평가 ${d.todo.evaluationsToWrite}` : '' %><%= d.todo.appealsToResolve !== undefined ? ` · 이의 처리 ${d.todo.appealsToResolve}` : '' %></div></div>
+    </div>
+    <% if (d.tasks.upcoming.length) { %>
+      <p class="small">앞으로 2주: <% d.tasks.upcoming.forEach((t, i) => { %><%= i ? ' · ' : '' %><a href="/tasks/<%= t.id %>"><%= t.title %></a> (<%= fmt(t.startAt) %>)<% }) %></p>
+    <% } %>
+  </section>
+<% } %>
 <div class="cols">
   <section class="card">
     <h2>계정 <span class="tag">FR-02</span></h2>
@@ -12,6 +28,9 @@
       <dt>상태</dt><dd><span class="badge status-<%= profile.status %>"><%= profile.statusLabel %></span></dd>
       <dt>마지막 로그인</dt><dd><%= fmt(profile.lastLoginAt) %></dd>
     </dl>
+    <% if (profile.role !== 'ADMIN') { %>
+      <p><a class="button small" href="/users/<%= profile.id %>">내 평판·받은 평가·변경 이력·활동 보기</a> <span class="tag">FR-19</span></p>
+    <% } %>
   </section>
 
   <section class="card">

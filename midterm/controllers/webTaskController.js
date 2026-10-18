@@ -9,6 +9,7 @@ const assignmentService = require('../services/assignmentService');
 const swapService = require('../services/swapService');
 const taskResourceService = require('../services/taskResourceService');
 const resourceCategoryService = require('../services/resourceCategoryService');
+const webRecord = require('./webRecordController');
 const crewService = require('../services/crewService');
 const access = require('../services/accessService');
 const { userIdOf, action, nothingChanged } = require('./webHelpers');
@@ -36,7 +37,7 @@ async function taskPage(req, res) {
   const manager = task.viewerRelation === 'manager';
   const open = !['COMPLETED', 'CANCELLED'].includes(task.status);
   const [assignees, notes, checklist, dependencies, progress, history, assignmentHistory, readiness, result, participations, swaps, types,
-    resources, requirements, candidates, categories] =
+    resources, requirements, candidates, categories, evaluations] =
     await Promise.all([
       assignmentService.listAssignees(req.user, taskId),
       taskContentService.listNotes(req.user, taskId),
@@ -54,6 +55,7 @@ async function taskPage(req, res) {
       taskService.getRequirements(req.user, taskId),
       manager && open ? taskResourceService.candidates(req.user, taskId, { page: 1, size: 10, sort: 'code' }) : null,
       manager && open ? resourceCategoryService.list() : [],
+      manager ? webRecord.taskEvaluations(req.user, task) : null,
     ]);
   res.render('task', {
     title: task.title,
@@ -77,6 +79,7 @@ async function taskPage(req, res) {
     requirements,
     candidates: candidates?.data ?? [],
     categories,
+    evaluations,
   });
 }
 

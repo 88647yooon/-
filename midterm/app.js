@@ -26,6 +26,8 @@ async function main() {
   if (seeded.crews > 0) console.log(`[DB] 시드 Crew ${seeded.crews}개와 소속·신청·요청 생성`);
   if (seeded.tasks > 0) console.log(`[DB] 시드 업무 ${seeded.tasks}개와 배정·지시사항·체크리스트·결과 생성`);
   if (seeded.resources > 0) console.log(`[DB] 시드 자원 ${seeded.resources}개와 할당·배정·사용 기록·점검·신청 생성`);
+  if (seeded.criteria > 0) console.log(`[DB] 평가 항목 ${seeded.criteria}개 생성`);
+  if (seeded.evaluations > 0) console.log(`[DB] 시드 평가 ${seeded.evaluations}건과 이의 제기·공로·징계 기록 생성`);
 
   // Express 5는 listen 실패 시에도 콜백을 오류와 함께 호출한다.
   const server = createApp().listen(config.port, (err) => {

@@ -79,7 +79,15 @@ async function revokeAllForUser(userId, reason, { exceptId = null } = {}, db = g
   return result.affectedRows;
 }
 
+// 구성원별 유효한 세션 수
+async function countActiveByUsers(userIds, db = getPool()) {
+  if (userIds.length === 0) return new Map();
+  const [rows] = await db.query(`SELECT user_id, COUNT(*) AS cnt FROM sessions WHERE user_id IN (?) AND ${ACTIVE} GROUP BY user_id`, [userIds]);
+  return new Map(rows.map((r) => [r.user_id, r.cnt]));
+}
+
 module.exports = {
+  countActiveByUsers,
   create,
   findActiveById,
   findActiveByTokenHash,

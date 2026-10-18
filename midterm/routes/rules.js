@@ -3,7 +3,9 @@ const {
   ALL_ROLES, MEMBER_STATUS_INFO, CREW_STATUS_INFO, MEMBERSHIP_TYPE_INFO, REQUEST_STATUS_INFO, CREW_MEMBER_ROLES,
   TASK_STATUS_INFO, TASK_PRIORITY_INFO, ASSIGNEE_ROLE_INFO, ASSIGNMENT_RESPONSE_INFO, TASK_OUTCOME_INFO, ASSIGNABLE_ROLES,
   RESOURCE_STATUS_INFO, MANUAL_RESOURCE_STATUSES, RESOURCE_MIN_ROLES, MAINTENANCE_SOURCE_INFO, MAINTENANCE_RESULT_INFO, RETURN_CONDITION_INFO,
+  EVALUATION_STATUS_INFO, APPEAL_STATUS_INFO, REPUTATION_EVENT_KIND_INFO, REPUTATION_POINTS, CHANGE_TYPE_INFO,
 } = require('../config/constants');
+const { ACTION_LABELS } = require('../config/actions');
 const { pagingRules } = require('../utils/pagination');
 const { idParam } = require('../middlewares/validate');
 
@@ -19,6 +21,10 @@ const SORTS = {
   resources: { keys: ['code', 'name', 'status', 'location', 'createdAt'], default: 'code' },
   allocations: { keys: ['startAt', 'allocatedAt'], default: 'startAt' },
   usages: { keys: ['startedAt', 'dueAt', 'returnedAt'], default: '-startedAt' },
+  evaluations: { keys: ['createdAt', 'totalScore'], default: '-createdAt' },
+  history: { keys: ['at'], default: 'at' },
+  auditLogs: { keys: ['createdAt'], default: '-createdAt' },
+  accounts: { keys: ['username', 'lastLoginAt', 'failedLoginCount', 'createdAt'], default: 'username' },
 };
 
 const paging = (sortName) => (sortName ? pagingRules(SORTS[sortName].keys, SORTS[sortName].default) : pagingRules());
@@ -44,6 +50,15 @@ const enums = {
   maintenanceResult: { type: 'string', enum: Object.keys(MAINTENANCE_RESULT_INFO) },
   returnCondition: { type: 'string', enum: Object.keys(RETURN_CONDITION_INFO) },
   requestBox: { type: 'string', enum: ['mine', 'review'] },
+  evaluationStatus: { type: 'string', enum: Object.keys(EVALUATION_STATUS_INFO) },
+  appealStatus: { type: 'string', enum: Object.keys(APPEAL_STATUS_INFO) },
+  appealDecision: { type: 'string', enum: ['DISMISS', 'CORRECT'] },
+  reputationKind: { type: 'string', enum: Object.keys(REPUTATION_EVENT_KIND_INFO) },
+  changeType: { type: 'string', enum: Object.keys(CHANGE_TYPE_INFO) },
+  activityKind: { type: 'string', enum: ['TASK', 'RESOURCE', 'EVALUATION', 'REPUTATION'] },
+  action: { type: 'string', enum: Object.keys(ACTION_LABELS) },
+  searchTypes: { type: 'array', items: { type: 'string', enum: ['users', 'crews', 'tasks', 'resources'] }, max: 4 },
+  interval: { type: 'string', enum: ['day', 'week', 'month'] },
 };
 
 const fields = {
@@ -77,6 +92,12 @@ const fields = {
   },
   resourceName: { type: 'string', required: true, min: 1, max: 100 },
   resourceDescription: { type: 'string', nullable: true, max: 1000 },
+  // MongoDB 문서 ID (평가, 이의 제기, 공로·징계, 감사 기록)
+  docId: { type: 'string', required: true, pattern: /^[a-f0-9]{24}$/, patternMessage: '24자리 16진수 문서 ID여야 합니다.' },
+  // 평가 점수: { 항목 키: 점수 } (항목과 범위는 서비스에서 평가 항목 설정으로 검사한다)
+  scores: { type: 'object' },
+  comment: { type: 'string', nullable: true, max: 1000 },
+  reputationPoints: { type: 'integer', required: true, min: REPUTATION_POINTS.min, max: REPUTATION_POINTS.max },
 };
 
 module.exports = { SORTS, paging, enums, fields };

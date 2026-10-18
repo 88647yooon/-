@@ -33,4 +33,18 @@ async function listParticipations(taskId, db = getPool()) {
   return rows.map(toParticipation);
 }
 
-module.exports = { upsertParticipation, findParticipation, listParticipations };
+// 평가할 수 있는 참여: since 이후에 완료된 업무에 실제로 참여한 구성원 (excludeUserId 본인 제외).
+// crewId를 주면 그 Crew의 업무로 범위를 좁힌다 (Capo의 관리 범위).
+async function listEvaluable({ since, crewId, excludeUserId }, db = getPool()) {
+  const [rows] = await db.query(
+    `SELECT p.task_id, p.user_id, t.title, t.crew_id, t.completed_at
+       FROM task_participations p JOIN tasks t ON t.id = p.task_id
+      WHERE t.status = 'COMPLETED' AND t.completed_at >= ? AND p.participated = 1 AND p.user_id <> ?
+        ${crewId !== undefined ? 'AND t.crew_id = ?' : ''}
+      ORDER BY t.completed_at DESC, p.task_id, p.user_id`,
+    [since, excludeUserId, ...(crewId !== undefined ? [crewId] : [])],
+  );
+  return rows.map((r) => ({ taskId: r.task_id, userId: r.user_id, title: r.title, crewId: r.crew_id, completedAt: r.completed_at }));
+}
+
+module.exports = { upsertParticipation, findParticipation, listParticipations, listEvaluable };

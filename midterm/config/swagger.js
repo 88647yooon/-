@@ -10,7 +10,7 @@ const {
   TASK_STATUS_INFO, TASK_PRIORITY_INFO, ASSIGNEE_ROLE_INFO, ASSIGNMENT_RESPONSE_INFO, ASSIGNMENT_RELEASE_REASON_INFO,
   TASK_OUTCOME_INFO, ASSIGNABLE_ROLES,
   RESOURCE_STATUS_INFO, RESOURCE_MIN_ROLES, MAINTENANCE_SOURCE_INFO, MAINTENANCE_RESULT_INFO, RETURN_CONDITION_INFO,
-  RESOURCE_RELEASE_REASON_INFO,
+  RESOURCE_RELEASE_REASON_INFO, EVALUATION_STATUS_INFO, APPEAL_STATUS_INFO, REPUTATION_EVENT_KIND_INFO, CHANGE_TYPE_INFO,
 } = require('./constants');
 const { SORTS } = require('../routes/rules');
 
@@ -52,6 +52,11 @@ ${crewRows}
   반환 예정 시각이 지난 미반환 자원은 반환될 때까지 사용 중으로 본다),
   점검중·사용불가 자원은 새로 배정할 수 없다(BR-08). 자원은 이용 최소 역할(기본 Soldier) 이상만 이용·신청할 수 있다.
 - 자원 사용은 배정(할당) 시간대 안에서 시작하고, 반환할 때 반환 상태(정상·손상·분실)에 따라 자원 상태가 바뀐다. 모든 사용·반환·상태 변경은 이력에 남는다.
+- 평가는 완료된 업무의 참여자만, 담당 Crew 책임자와 Underboss·Boss가 업무 완료 후 30일 안에 한 번씩 작성한다(완료되지 않은 업무는 409).
+  평가자는 7일 안에 고칠 수 있고, 대상자는 이의를 제기하며, Underboss·Boss가 사유를 남기고 정정·철회한다. 모든 변경 전후가 이력에 남는다(BR-10).
+- 구성원 변경 이력·활동·평가·평판은 본인, 그 구성원이 속한 Crew의 책임자, Underboss·Boss만 본다. 감사 기록은 Boss·Administrator가 본다.
+- 통합 검색 결과는 종류마다 요청자의 권한 범위로 제한된다. 운영 현황 통계는 Underboss·Boss, 관리자 기능(/api/admin)은 Administrator만 쓴다.
+- 역할별 권한은 Administrator가 바꿀 수 있고(GET·PUT /api/admin/permissions) 모든 권한 검사에 바로 반영된다.
 
 ### 공통 응답 형식
 - 성공: \`{ "success": true, "data": ..., "meta": ... }\` (\`meta\`는 목록 조회에만: page, size, total, totalPages)
@@ -68,6 +73,7 @@ const sortParameter = ({ keys, default: def }) => ({
 });
 
 const idPath = (name, description) => ({ name, in: 'path', required: true, description, schema: { type: 'integer', minimum: 1 } });
+const docPath = (name, description) => ({ name, in: 'path', required: true, description: `${description} (MongoDB 문서 ID)`, schema: { type: 'string', pattern: '^[a-f0-9]{24}$' } });
 const enumQuery = (name, schemaRef, description) => ({ name, in: 'query', description, schema: { $ref: `#/components/schemas/${schemaRef}` } });
 
 function errorResponse(description, code, message, details = null) {
@@ -160,6 +166,13 @@ const definition = {
     { name: '구성원 자원 배정', description: '구성원에게 자원 배정, 배정 목록, 기간 변경, 취소' },
     { name: '자원 사용 신청', description: '구성원의 자원 사용 신청과 승인·거절·취소' },
     { name: '자원 사용·반환', description: '사용 시작, 반환, 일괄 반환, 사용 이력, 반환 예정 연장, 인계, 고장 신고, 미반환 목록' },
+    { name: '이력 조회', description: '구성원 변경 이력, 구성원·Crew 활동 타임라인' },
+    { name: '평가', description: '평가 항목, 완료 업무 참여자 평가·수정·철회, 평가 조회, 이의 제기와 처리' },
+    { name: '평판', description: '평판 요약, 공로·징계 기록, 평판 순위' },
+    { name: '감사 기록', description: '관리 활동·중요 상태 변경 기록 검색·상세·내보내기, 권한 거부 기록' },
+    { name: '검색', description: '권한 범위 안의 통합 검색과 검색 조건 저장' },
+    { name: '운영 현황', description: '구성원·Crew·업무·자원·평가·소속 변화·관리 활동 통계, 운영 경고, Crew 업무량' },
+    { name: '관리자', description: '계정 잠금·해제, 임시 비밀번호, 강제 로그아웃, 로그인 이력, 역할별 권한, 운영 설정, 무결성 점검, DB 상태' },
   ],
   security: [{ bearerAuth: [] }],
   components: {
@@ -204,6 +217,16 @@ const definition = {
       AllocationSort: sortParameter(SORTS.allocations),
       UsageSort: sortParameter(SORTS.usages),
       ResourceStatusFilter: enumQuery('status', 'ResourceStatus', '자원 상태'),
+      EvaluationId: docPath('evaluationId', '평가 ID'),
+      AppealId: docPath('appealId', '이의 제기 ID'),
+      EventId: docPath('eventId', '공로·징계 기록 ID'),
+      LogId: docPath('logId', '감사 기록 ID'),
+      EvaluationSort: sortParameter(SORTS.evaluations),
+      HistorySort: sortParameter(SORTS.history),
+      AuditSort: sortParameter(SORTS.auditLogs),
+      AccountSort: sortParameter(SORTS.accounts),
+      SearchId: docPath('searchId', '저장 검색 ID'),
+      Interval: { name: 'interval', in: 'query', description: '묶음 단위 (한국 시간 기준)', schema: { type: 'string', enum: ['day', 'week', 'month'] } },
     },
     schemas: {
       Role: enumSchema(ROLE_INFO, '역할'),
@@ -483,6 +506,497 @@ const definition = {
           quantity: { type: 'integer', example: 1 },
           allocatedCount: { type: 'integer', description: '이 분류에서 업무에 할당된 자원 수' },
           satisfied: { type: 'boolean' },
+        },
+      },
+      ChangeType: enumSchema(CHANGE_TYPE_INFO, '변경 유형'),
+      EvaluationStatus: enumSchema(EVALUATION_STATUS_INFO, '평가 상태'),
+      AppealStatus: enumSchema(APPEAL_STATUS_INFO, '이의 제기 상태'),
+      ReputationKind: enumSchema(REPUTATION_EVENT_KIND_INFO, '공로·징계 구분'),
+      Person: {
+        type: 'object',
+        description: '기록 당시의 구성원 정보',
+        properties: { id: { type: 'integer' }, username: { type: 'string' }, name: { type: 'string' }, role: { type: 'string', nullable: true }, roleLabel: { type: 'string', nullable: true } },
+      },
+      Criterion: {
+        type: 'object',
+        properties: {
+          key: { type: 'string', example: 'performance' }, label: { type: 'string', example: '업무 성과' }, description: { type: 'string', nullable: true },
+          weight: { type: 'integer', example: 2 }, position: { type: 'integer' },
+        },
+      },
+      ScoreItem: {
+        type: 'object',
+        properties: { key: { type: 'string' }, label: { type: 'string' }, weight: { type: 'integer' }, score: { type: 'integer', minimum: 1, maximum: 5 } },
+      },
+      Evaluation: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', example: '6531f0c2a1b2c3d4e5f60718' },
+          task: { type: 'object', properties: { id: { type: 'integer' }, title: { type: 'string' }, completedAt: { type: 'string', format: 'date-time', nullable: true } } },
+          crewId: { type: 'integer', nullable: true },
+          evaluatee: ref('Person'),
+          evaluator: ref('Person'),
+          scores: { type: 'array', items: ref('ScoreItem'), description: '작성 당시 평가 항목별 점수' },
+          totalScore: { type: 'number', example: 4.4, description: '가중 평균 (1~5)' },
+          comment: { type: 'string', nullable: true },
+          status: ref('EvaluationStatus'),
+          statusLabel: { type: 'string', example: '유효' },
+          editableUntil: { type: 'string', format: 'date-time', description: '평가자가 고칠 수 있는 마지막 시각' },
+          editable: { type: 'boolean', description: '지금 보는 사람이 고칠 수 있는지' },
+          revisionCount: { type: 'integer' },
+          withdrawnAt: { type: 'string', format: 'date-time', nullable: true },
+          withdrawnBy: nullableRef('Person'),
+          withdrawReason: { type: 'string', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      EvaluationRevision: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['UPDATE', 'CORRECTION'] },
+          kindLabel: { type: 'string', example: '평가자 수정' },
+          at: { type: 'string', format: 'date-time' },
+          by: ref('Person'),
+          before: { type: 'object', properties: { scores: { type: 'array', items: ref('ScoreItem') }, totalScore: { type: 'number' }, comment: { type: 'string', nullable: true } } },
+          after: { type: 'object', properties: { scores: { type: 'array', items: ref('ScoreItem') }, totalScore: { type: 'number' }, comment: { type: 'string', nullable: true } } },
+          reason: { type: 'string', nullable: true },
+          appealId: { type: 'string', nullable: true, description: '이의 제기로 정정했으면 그 이의 ID' },
+        },
+      },
+      Appeal: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          evaluationId: { type: 'string' },
+          task: { type: 'object', properties: { id: { type: 'integer' }, title: { type: 'string' } } },
+          appellant: ref('Person'),
+          reason: { type: 'string' },
+          status: ref('AppealStatus'),
+          statusLabel: { type: 'string', example: '처리 대기' },
+          resolvedBy: nullableRef('Person'),
+          resolvedAt: { type: 'string', format: 'date-time', nullable: true },
+          resolutionNote: { type: 'string', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      EvaluationDetail: {
+        allOf: [ref('Evaluation'), {
+          type: 'object',
+          properties: {
+            revisions: { type: 'array', items: ref('EvaluationRevision'), description: '수정·정정 이력 (변경 전후, 사유)' },
+            appeals: { type: 'array', items: ref('Appeal') },
+          },
+        }],
+      },
+      AppealResolved: { allOf: [ref('Appeal'), { type: 'object', properties: { evaluation: ref('EvaluationDetail') } }] },
+      PendingEvaluation: {
+        type: 'object',
+        properties: {
+          task: ref('TaskBrief'),
+          evaluatee: ref('UserBrief'),
+          completedAt: { type: 'string', format: 'date-time' },
+          deadline: { type: 'string', format: 'date-time', description: '평가할 수 있는 마지막 시각 (완료 후 30일)' },
+        },
+      },
+      ReputationEvent: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          user: ref('Person'),
+          kind: ref('ReputationKind'),
+          kindLabel: { type: 'string', example: '공로' },
+          points: { type: 'integer', example: 3, description: '공로는 +, 징계는 -' },
+          title: { type: 'string' },
+          description: { type: 'string', nullable: true },
+          recordedBy: ref('Person'),
+          active: { type: 'boolean', description: '취소되지 않았으면 true' },
+          cancelledBy: nullableRef('Person'),
+          cancelledAt: { type: 'string', format: 'date-time', nullable: true },
+          cancelReason: { type: 'string', nullable: true },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      Reputation: {
+        type: 'object',
+        properties: {
+          user: ref('UserBrief'),
+          reputationScore: { type: 'number', example: 88, description: '0~100' },
+          evaluations: { type: 'object', properties: { count: { type: 'integer' }, averageScore: { type: 'number', nullable: true } } },
+          criteria: { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, label: { type: 'string' }, averageScore: { type: 'number' }, count: { type: 'integer' } } } },
+          trend: { type: 'array', description: '최근 6개월 월별 평균', items: { type: 'object', properties: { month: { type: 'string', example: '2026-10' }, averageScore: { type: 'number' }, count: { type: 'integer' } } } },
+          events: {
+            type: 'object',
+            properties: { points: { type: 'integer' }, meritCount: { type: 'integer' }, disciplineCount: { type: 'integer' }, recent: { type: 'array', items: ref('ReputationEvent') } },
+          },
+          formula: { type: 'string' },
+        },
+      },
+      RankingEntry: {
+        type: 'object',
+        properties: {
+          rank: { type: 'integer', example: 1 },
+          user: ref('UserBrief'),
+          crew: nullableRef('CrewBrief'),
+          reputationScore: { type: 'number' },
+          averageScore: { type: 'number', nullable: true },
+          evaluationCount: { type: 'integer' },
+          eventPoints: { type: 'integer' },
+        },
+      },
+      ChangeHistoryEntry: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          at: { type: 'string', format: 'date-time' },
+          type: ref('ChangeType'),
+          typeLabel: { type: 'string', example: '역할' },
+          action: { type: 'string', example: 'USER_ROLE_CHANGED' },
+          actionLabel: { type: 'string', example: '역할 변경' },
+          summary: { type: 'string', example: 'Associate → Soldier' },
+          before: { type: 'object', nullable: true },
+          after: { type: 'object', nullable: true },
+          actor: { type: 'object', nullable: true, properties: { id: { type: 'integer' }, username: { type: 'string' }, role: { type: 'string' } } },
+          reason: { type: 'string', nullable: true },
+        },
+      },
+      ActivityItem: {
+        type: 'object',
+        properties: {
+          at: { type: 'string', format: 'date-time' },
+          kind: { type: 'string', enum: ['TASK', 'RESOURCE', 'EVALUATION', 'REPUTATION'] },
+          type: { type: 'string', enum: ['TASK_ASSIGNED', 'TASK_RELEASED', 'TASK_PARTICIPATION', 'RESOURCE_CHECKED_OUT', 'RESOURCE_RETURNED', 'EVALUATION_RECEIVED', 'REPUTATION_EVENT'] },
+          typeLabel: { type: 'string', example: '업무 배정' },
+          summary: { type: 'string', example: "'강북 정기 순찰' 업무에 리더(으)로 배정" },
+          task: { type: 'object', nullable: true, properties: { id: { type: 'integer' }, title: { type: 'string' } } },
+          resource: { type: 'object', nullable: true, properties: { id: { type: 'integer' }, name: { type: 'string' } } },
+          evaluationId: { type: 'string', description: 'EVALUATION_RECEIVED' },
+          eventId: { type: 'string', description: 'REPUTATION_EVENT' },
+        },
+      },
+      ActivityLogEntry: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          at: { type: 'string', format: 'date-time' },
+          action: { type: 'string', example: 'USER_ROLE_CHANGED' },
+          actionLabel: { type: 'string', example: '역할 변경' },
+          actor: { type: 'object', nullable: true, properties: { id: { type: 'integer' }, username: { type: 'string' }, role: { type: 'string' } } },
+          target: { type: 'object', properties: { entity: { type: 'string', example: 'user' }, id: { type: 'string' }, label: { type: 'string' } } },
+          related: { type: 'array', items: { type: 'object', properties: { entity: { type: 'string' }, id: { type: 'string' }, label: { type: 'string' } } } },
+          reason: { type: 'string', nullable: true },
+        },
+      },
+      ActivityLogDetail: {
+        allOf: [ref('ActivityLogEntry'), { type: 'object', properties: { before: { type: 'object', nullable: true }, after: { type: 'object', nullable: true }, ip: { type: 'string', nullable: true } } }],
+      },
+      SecurityEvent: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          at: { type: 'string', format: 'date-time' },
+          event: { type: 'string', example: 'ACCESS_DENIED' },
+          user: { type: 'object', nullable: true, properties: { id: { type: 'integer' }, username: { type: 'string' }, role: { type: 'string' } } },
+          method: { type: 'string', example: 'GET' },
+          path: { type: 'string', example: '/api/audit-logs' },
+          reason: { type: 'string', nullable: true },
+          details: { type: 'object', nullable: true },
+          ip: { type: 'string', nullable: true },
+        },
+      },
+      SearchTypeResult: {
+        type: 'object',
+        properties: {
+          restricted: { type: 'boolean', description: '이 종류를 볼 권한이 없으면 true (items는 빈 배열)' },
+          message: { type: 'string', description: 'restricted일 때 이유' },
+          scope: { type: 'string', enum: ['participant', 'usable'], description: '범위를 좁혀 찾은 경우: 내가 참여 중인 업무 / 내 역할로 이용할 수 있는 자원' },
+          total: { type: 'integer' },
+          items: { type: 'array', items: { type: 'object' }, description: '구성원은 UserView, Crew는 Crew, 업무는 Task, 자원은 Resource 형태' },
+        },
+      },
+      SearchResult: {
+        type: 'object',
+        properties: {
+          q: { type: 'string' },
+          types: { type: 'array', items: { type: 'string' } },
+          page: { type: 'integer' },
+          size: { type: 'integer' },
+          total: { type: 'integer', description: '모든 종류의 결과 수 합계' },
+          results: {
+            type: 'object',
+            properties: { users: ref('SearchTypeResult'), crews: ref('SearchTypeResult'), tasks: ref('SearchTypeResult'), resources: ref('SearchTypeResult') },
+          },
+        },
+      },
+      SavedSearch: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' }, name: { type: 'string' }, q: { type: 'string' }, types: { type: 'array', items: { type: 'string' } },
+          runCount: { type: 'integer' }, lastRunAt: { type: 'string', format: 'date-time', nullable: true }, createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      SavedSearchResult: { allOf: [ref('SearchResult'), { type: 'object', properties: { savedSearch: ref('SavedSearch') } }] },
+      DeletedDoc: { type: 'object', properties: { id: { type: 'string' }, deleted: { type: 'boolean', example: true } } },
+      CountMap: { type: 'object', additionalProperties: { type: 'integer' }, description: '상태 코드별 개수' },
+      StatsOverview: {
+        type: 'object',
+        properties: {
+          generatedAt: { type: 'string', format: 'date-time' },
+          members: { type: 'object', properties: { total: { type: 'integer' }, byStatus: ref('CountMap') } },
+          crews: { type: 'object', properties: { active: { type: 'integer' }, disbanded: { type: 'integer' } } },
+          tasks: { type: 'object', properties: { total: { type: 'integer' }, open: { type: 'integer' }, inProgress: { type: 'integer' }, byStatus: ref('CountMap') } },
+          resources: {
+            type: 'object',
+            properties: {
+              total: { type: 'integer' }, byStatus: ref('CountMap'),
+              availabilityRate: { type: 'number', description: '사용가능 비율(%)' }, assignableRate: { type: 'number', description: '사용가능·사용중 비율(%)' },
+            },
+          },
+          evaluations: { type: 'object', properties: { count: { type: 'integer' }, averageScore: { type: 'number', nullable: true } } },
+        },
+      },
+      StatsMembers: {
+        type: 'object',
+        properties: {
+          crewId: { type: 'integer', nullable: true },
+          total: { type: 'integer' },
+          byStatus: ref('CountMap'),
+          byRole: { type: 'array', items: { type: 'object', properties: { role: ref('Role'), label: { type: 'string' }, total: { type: 'integer' }, byStatus: ref('CountMap') } } },
+        },
+      },
+      StatsCrews: {
+        type: 'object',
+        properties: {
+          from: { type: 'string', format: 'date-time' }, to: { type: 'string', format: 'date-time' },
+          crews: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                crew: ref('CrewBrief'), capo: nullableRef('UserBrief'), regularCount: { type: 'integer' }, temporaryCount: { type: 'integer' },
+                taskCount: { type: 'integer' }, openCount: { type: 'integer' }, completedCount: { type: 'integer' }, cancelledCount: { type: 'integer' },
+                completionRate: { type: 'number', description: '완료 / (완료 + 취소) (%)' }, evaluationAverage: { type: 'number', nullable: true }, evaluationCount: { type: 'integer' },
+              },
+            },
+          },
+        },
+      },
+      RegionStat: {
+        type: 'object',
+        properties: { region: { type: 'string' }, crews: { type: 'integer' }, activeCrews: { type: 'integer' }, members: { type: 'integer' }, tasks: { type: 'integer' } },
+      },
+      StatsTaskTrend: {
+        type: 'object',
+        properties: {
+          from: { type: 'string', format: 'date-time' }, to: { type: 'string', format: 'date-time' }, interval: { type: 'string' }, crewId: { type: 'integer', nullable: true },
+          buckets: { type: 'array', items: { type: 'object', properties: { period: { type: 'string', example: '2026-10-20' }, total: { type: 'integer' }, byStatus: ref('CountMap') } } },
+        },
+      },
+      StatsLeadTime: {
+        type: 'object',
+        properties: {
+          from: { type: 'string', format: 'date-time' }, to: { type: 'string', format: 'date-time' },
+          priorities: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                priority: ref('TaskPriority'), label: { type: 'string' }, completedCount: { type: 'integer' },
+                averageLeadHours: { type: 'number', nullable: true }, averagePlannedHours: { type: 'number', nullable: true }, averageDelayHours: { type: 'number', nullable: true },
+              },
+            },
+          },
+        },
+      },
+      StatsResources: {
+        type: 'object',
+        properties: {
+          from: { type: 'string', format: 'date-time' }, to: { type: 'string', format: 'date-time' },
+          total: { type: 'integer' }, byStatus: ref('CountMap'), usedHours: { type: 'number' }, utilizationRate: { type: 'number', description: '가동률(%)' },
+          categories: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                category: { type: 'object', properties: { id: { type: 'integer' }, name: { type: 'string' } } }, total: { type: 'integer' }, byStatus: ref('CountMap'),
+                usedHours: { type: 'number' }, utilizationRate: { type: 'number' },
+              },
+            },
+          },
+        },
+      },
+      UsageRankingEntry: {
+        type: 'object',
+        properties: { rank: { type: 'integer' }, resource: ref('ResourceBrief'), usageCount: { type: 'integer' }, usedHours: { type: 'number' } },
+      },
+      StatsEvaluations: {
+        type: 'object',
+        properties: {
+          from: { type: 'string', format: 'date-time' }, to: { type: 'string', format: 'date-time' }, interval: { type: 'string' }, crewId: { type: 'integer', nullable: true },
+          buckets: { type: 'array', items: { type: 'object', properties: { period: { type: 'string', example: '2026-10' }, count: { type: 'integer' }, averageScore: { type: 'number', nullable: true } } } },
+          byCrew: { type: 'array', items: { type: 'object', properties: { crew: nullableRef('CrewBrief'), label: { type: 'string' }, count: { type: 'integer' }, averageScore: { type: 'number' } } } },
+        },
+      },
+      StatsMembershipChanges: {
+        type: 'object',
+        properties: {
+          from: { type: 'string', format: 'date-time' }, to: { type: 'string', format: 'date-time' }, interval: { type: 'string' }, crewId: { type: 'integer', nullable: true },
+          totals: { type: 'object', properties: { joined: { type: 'integer' }, transferred: { type: 'integer' }, removed: { type: 'integer' }, withdrawn: { type: 'integer' } } },
+          buckets: {
+            type: 'array',
+            items: { type: 'object', properties: { period: { type: 'string' }, joined: { type: 'integer' }, transferred: { type: 'integer' }, removed: { type: 'integer' }, withdrawn: { type: 'integer' } } },
+          },
+        },
+      },
+      StatsAdminActivity: {
+        type: 'object',
+        properties: {
+          from: { type: 'string', format: 'date-time' }, to: { type: 'string', format: 'date-time' }, interval: { type: 'string' }, total: { type: 'integer' },
+          areas: { type: 'array', items: { type: 'object', properties: { area: { type: 'string' }, label: { type: 'string' }, count: { type: 'integer' } } } },
+          topActions: { type: 'array', items: { type: 'object', properties: { action: { type: 'string' }, label: { type: 'string' }, count: { type: 'integer' } } } },
+          byActorRole: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, label: { type: 'string' }, count: { type: 'integer' } } } },
+          buckets: { type: 'array', items: { type: 'object', properties: { period: { type: 'string' }, total: { type: 'integer' }, byArea: ref('CountMap') } } },
+        },
+      },
+      StatsAlerts: {
+        type: 'object',
+        properties: {
+          generatedAt: { type: 'string', format: 'date-time' },
+          criteria: { type: 'object', properties: { returnGraceMinutes: { type: 'integer' }, longMaintenanceDays: { type: 'integer' } } },
+          counts: { type: 'object', properties: { overdueUsages: { type: 'integer' }, overdueTasks: { type: 'integer' }, longMaintenances: { type: 'integer' } } },
+          overdueUsages: { type: 'array', items: { allOf: [ref('ResourceUsage'), { type: 'object', properties: { hoursLate: { type: 'number' } } }] } },
+          overdueTasks: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'integer' }, title: { type: 'string' }, status: ref('TaskStatus'), statusLabel: { type: 'string' }, crew: nullableRef('CrewBrief'),
+                startAt: { type: 'string', format: 'date-time' }, endAt: { type: 'string', format: 'date-time' }, hoursLate: { type: 'integer' },
+              },
+            },
+          },
+          longMaintenances: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'integer' }, resource: { type: 'object', properties: { id: { type: 'integer' }, code: { type: 'string' }, name: { type: 'string' } } },
+                reason: { type: 'string' }, startedAt: { type: 'string', format: 'date-time' }, expectedEndAt: { type: 'string', format: 'date-time', nullable: true },
+                daysOpen: { type: 'integer' }, pastExpected: { type: 'boolean' },
+              },
+            },
+          },
+        },
+      },
+      CrewWorkload: {
+        type: 'object',
+        properties: {
+          crew: ref('CrewBrief'), from: { type: 'string', format: 'date-time' }, to: { type: 'string', format: 'date-time' },
+          members: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                user: ref('UserBrief'), membershipType: ref('MembershipType'), taskCount: { type: 'integer' }, openCount: { type: 'integer' },
+                leaderCount: { type: 'integer' }, hours: { type: 'number' }, nextStartAt: { type: 'string', format: 'date-time', nullable: true },
+              },
+            },
+          },
+        },
+      },
+      MyDashboard: {
+        type: 'object',
+        properties: {
+          user: ref('UserBrief'),
+          tasks: { type: 'object', properties: { openCount: { type: 'integer' }, inProgressCount: { type: 'integer' }, upcoming: { type: 'array', items: ref('Task') } } },
+          resources: { type: 'object', properties: { inUse: { type: 'array', items: ref('ResourceUsage') }, upcomingAllocations: { type: 'array', items: ref('ResourceAllocation') } } },
+          evaluations: { type: 'object', properties: { recent: { type: 'array', items: ref('Evaluation') }, reputationScore: { type: 'number', nullable: true } } },
+          todo: {
+            type: 'object',
+            properties: {
+              awaitingMyResponse: { type: 'integer' }, swapRequestsToMe: { type: 'integer' }, myPendingResourceRequests: { type: 'integer' },
+              evaluationsToWrite: { type: 'integer', description: 'Capo 이상' }, appealsToResolve: { type: 'integer', description: 'Underboss·Boss' },
+            },
+          },
+        },
+      },
+      Account: {
+        allOf: [ref('UserBrief'), {
+          type: 'object',
+          properties: {
+            lastLoginAt: { type: 'string', format: 'date-time', nullable: true }, failedLoginCount: { type: 'integer' },
+            locked: { type: 'boolean' }, lockedAt: { type: 'string', format: 'date-time', nullable: true }, lockedReason: { type: 'string', nullable: true },
+            passwordChangedAt: { type: 'string', format: 'date-time', nullable: true }, activeSessionCount: { type: 'integer' }, createdAt: { type: 'string', format: 'date-time' },
+            revokedSessionCount: { type: 'integer', description: '잠금 응답에서만: 끊은 세션 수' },
+          },
+        }],
+      },
+      PasswordReset: {
+        type: 'object',
+        properties: { user: ref('UserBrief'), temporaryPassword: { type: 'string', example: 'k7Rm2xQp9aZt', description: '한 번만 보여 준다' }, revokedSessionCount: { type: 'integer' } },
+      },
+      ForceLogout: { type: 'object', properties: { user: ref('UserBrief'), revokedSessionCount: { type: 'integer' } } },
+      LoginHistoryEntry: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' }, at: { type: 'string', format: 'date-time' }, userId: { type: 'integer', nullable: true }, username: { type: 'string' },
+          success: { type: 'boolean' }, reason: { type: 'string', nullable: true, example: 'WRONG_PASSWORD' }, ip: { type: 'string', nullable: true }, userAgent: { type: 'string', nullable: true },
+        },
+      },
+      PermissionState: { type: 'object', properties: { allowed: { type: 'boolean' }, default: { type: 'boolean' }, overridden: { type: 'boolean' } } },
+      PermissionMatrix: {
+        type: 'object',
+        properties: {
+          roles: { type: 'array', items: { type: 'object', properties: { role: ref('Role'), label: { type: 'string' } } } },
+          permissions: {
+            type: 'array',
+            items: { type: 'object', properties: { key: { type: 'string', example: 'stats.read' }, description: { type: 'string' }, roles: { type: 'object', additionalProperties: ref('PermissionState') } } },
+          },
+        },
+      },
+      RolePermissions: {
+        type: 'object',
+        properties: {
+          role: ref('Role'), roleLabel: { type: 'string' },
+          allowed: { type: 'array', items: { type: 'string' }, description: '지금 이 역할이 가진 권한 키' },
+          overrides: { type: 'array', items: { type: 'object', properties: { key: { type: 'string' }, allowed: { type: 'boolean' } } }, description: '기본값과 다르게 저장된 것' },
+          added: { type: 'array', items: { type: 'string' } },
+          removed: { type: 'array', items: { type: 'string' } },
+          permissions: { type: 'array', items: { allOf: [{ type: 'object', properties: { key: { type: 'string' }, description: { type: 'string' } } }, ref('PermissionState')] } },
+        },
+      },
+      Setting: {
+        type: 'object',
+        properties: {
+          key: { type: 'string', example: 'evaluationEditDays' }, label: { type: 'string', example: '평가 수정 기한' }, description: { type: 'string' }, unit: { type: 'string', example: '일' },
+          min: { type: 'integer' }, max: { type: 'integer' }, default: { type: 'integer' }, value: { type: 'integer' },
+          updatedBy: { type: 'integer', nullable: true }, updatedAt: { type: 'string', format: 'date-time', nullable: true },
+        },
+      },
+      Integrity: {
+        type: 'object',
+        properties: {
+          checkedAt: { type: 'string', format: 'date-time' },
+          ok: { type: 'boolean' },
+          checks: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                key: { type: 'string' }, label: { type: 'string' }, rule: { type: 'string', example: 'BR-01' }, ok: { type: 'boolean' }, count: { type: 'integer' },
+                items: { type: 'array', items: { type: 'object' }, description: '문제가 있는 데이터 (최대 50건)' },
+              },
+            },
+          },
+        },
+      },
+      Health: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', enum: ['ok', 'degraded'] },
+          mysql: { type: 'object', properties: { ok: { type: 'boolean' }, latencyMs: { type: 'integer' }, database: { type: 'string' }, error: { type: 'string' } } },
+          mongodb: { type: 'object', properties: { ok: { type: 'boolean' }, latencyMs: { type: 'integer' }, database: { type: 'string' }, state: { type: 'string' }, error: { type: 'string' } } },
+          uptimeSeconds: { type: 'integer' }, node: { type: 'string' }, checkedAt: { type: 'string', format: 'date-time' },
         },
       },
       TaskRequirements: {
@@ -1108,6 +1622,53 @@ const definition = {
       UsagePage: okPage('ResourceUsage'),
       UsageReturned: ok('UsageReturn'),
       DamageReportOne: ok('DamageReport'),
+      ChangeHistoryPage: okPage('ChangeHistoryEntry'),
+      ActivityPage: okPage('ActivityItem'),
+      ActivityLogPage: okPage('ActivityLogEntry'),
+      ActivityLogOne: ok('ActivityLogDetail'),
+      SecurityEventPage: okPage('SecurityEvent'),
+      CriterionList: okList('Criterion'),
+      EvaluationOne: ok('Evaluation'),
+      EvaluationList: okList('Evaluation'),
+      EvaluationPage: okPage('Evaluation'),
+      EvaluationDetailOne: ok('EvaluationDetail'),
+      PendingEvaluationList: okList('PendingEvaluation', '작성할 평가 목록'),
+      AppealOne: ok('Appeal'),
+      AppealPage: okPage('Appeal'),
+      AppealResolvedOne: ok('AppealResolved'),
+      ReputationOne: ok('Reputation'),
+      ReputationEventOne: ok('ReputationEvent'),
+      ReputationEventPage: okPage('ReputationEvent'),
+      RankingPage: okPage('RankingEntry'),
+      SearchOne: ok('SearchResult'),
+      SavedSearchOne: ok('SavedSearch'),
+      SavedSearchList: okList('SavedSearch'),
+      SavedSearchResultOne: ok('SavedSearchResult'),
+      DeletedDoc: ok('DeletedDoc', '삭제 성공'),
+      StatsOverviewOne: ok('StatsOverview'),
+      StatsMembersOne: ok('StatsMembers'),
+      StatsCrewsOne: ok('StatsCrews'),
+      StatsRegionsList: okList('RegionStat'),
+      StatsTaskTrendOne: ok('StatsTaskTrend'),
+      StatsLeadTimeOne: ok('StatsLeadTime'),
+      StatsResourcesOne: ok('StatsResources'),
+      UsageRankingPage: okPage('UsageRankingEntry'),
+      StatsEvaluationsOne: ok('StatsEvaluations'),
+      StatsMembershipChangesOne: ok('StatsMembershipChanges'),
+      StatsAdminActivityOne: ok('StatsAdminActivity'),
+      StatsAlertsOne: ok('StatsAlerts'),
+      CrewWorkloadOne: ok('CrewWorkload'),
+      MyDashboardOne: ok('MyDashboard'),
+      AccountPage: okPage('Account'),
+      AccountOne: ok('Account'),
+      PasswordResetOne: ok('PasswordReset'),
+      ForceLogoutOne: ok('ForceLogout'),
+      LoginHistoryPage: okPage('LoginHistoryEntry'),
+      PermissionMatrixOne: ok('PermissionMatrix'),
+      RolePermissionsOne: ok('RolePermissions'),
+      SettingList: okList('Setting'),
+      IntegrityOne: ok('Integrity'),
+      HealthOne: ok('Health'),
     },
   },
 };

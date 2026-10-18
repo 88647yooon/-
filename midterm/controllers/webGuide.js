@@ -1,4 +1,4 @@
-// 홈 화면의 "기능 요구사항 확인" 표와 "업무 규칙 확인 시나리오" 내용 (단계 1~4).
+// 홈 화면의 "기능 요구사항 확인" 표와 "업무 규칙 확인 시나리오" 내용 (단계 1~6).
 // 기술 보고서의 기능 확인 방법과 같은 순서로 확인할 수 있게 정리한다.
 
 const CHECKS = [
@@ -102,6 +102,36 @@ const CHECKS = [
     how: 'capo1로 업무 화면의 자원 칸에서 자원을 할당하고, 자원 화면에서 구성원에게 배정한다. soldier3의 무전기 사용 신청은 capo2가 [내 자원]에서 승인한다.',
     api: 'POST /api/tasks/{taskId}/resources, /api/resources/{resourceId}/allocations, /api/resource-requests/{requestId}/approve',
   },
+  {
+    step: 5, id: 'FR-18', title: '평가·평판 기록', link: '/evaluations',
+    how: 'capo2로 [평가]의 작성할 평가에서 강남 정보 수집을 열어 soldier1을 평가한다. underboss1로 구성원 상세에서 공로·징계를 기록하면 평판 점수가 바뀐다.',
+    api: 'POST /api/tasks/{taskId}/evaluations, PATCH /api/evaluations/{evaluationId}, POST /api/users/{userId}/reputation-events',
+  },
+  {
+    step: 5, id: 'FR-19', title: '권한 범위 안의 활동·평가 이력 조회', link: '/me',
+    how: 'soldier1로 [내 정보] → 내 구성원 화면에서 평판, 받은 평가, 변경 이력, 활동을 본다. 다른 Soldier의 화면에서는 이 영역이 막힌다.',
+    api: 'GET /api/users/{userId}/change-history, /activity, /evaluations, /reputation',
+  },
+  {
+    step: 5, id: 'FR-20', title: '중요 상태 변경·관리 활동 기록', link: '/audit-logs',
+    how: 'boss 또는 admin으로 [감사 기록]에서 행위·대상·기간으로 찾고 상세에서 변경 전후를 본다. admin은 CSV로 내려받고 권한 거부 기록도 본다.',
+    api: 'GET /api/audit-logs, /api/audit-logs/{logId}, /export, /api/security-events',
+  },
+  {
+    step: 6, id: 'FR-21', title: '권한 범위 안의 통합 검색과 조건 저장', link: '/search?q=%EA%B0%95%EB%B6%81',
+    how: '[검색]에서 "강북"을 boss와 soldier1로 각각 찾아 본다. soldier1은 내가 참여 중인 업무와 이용할 수 있는 자원만, associate1은 구성원·자원이 막힌다. 조건을 저장해 다시 실행한다.',
+    api: 'GET /api/search, POST·GET /api/saved-searches, GET /api/saved-searches/{searchId}/results',
+  },
+  {
+    step: 6, id: 'FR-22', title: '기간·Crew·구성원 상태·업무 상태별 운영 현황', link: '/dashboard',
+    how: 'boss로 [운영 현황]에서 기간을 바꾸며 업무 상태 추이, 자원 상태·가동률, Crew 비교, 구성원 분포, 운영 경고를 본다. Crew 화면에는 소속원별 업무량이 있다.',
+    api: 'GET /api/stats/overview, /members, /crews, /tasks, /resources, /alerts, /api/crews/{crewId}/workload',
+  },
+  {
+    step: 6, id: 'FR-23', title: '계정·권한 관리', link: '/admin',
+    how: 'admin으로 [관리자]에서 계정을 잠그고 풀고, 임시 비밀번호를 발급하고, 역할별 권한과 운영 설정을 바꾼다. 무결성 점검과 DB 연결 상태도 여기서 본다.',
+    api: 'PUT·DELETE /api/admin/accounts/{userId}/lock, PUT /api/admin/permissions/{role}, PUT /api/admin/settings',
+  },
 ];
 
 const SCENARIOS = [
@@ -200,17 +230,43 @@ const SCENARIOS = [
     ],
   },
   {
-    rule: 'BR-10', title: '역할·소속·상태 변경 이력',
+    rule: 'FR-18', title: '완료되지 않은 업무는 평가 불가',
     steps: [
-      '구성원 상세의 소속 이력에서 언제, 왜 소속이 끝났는지 확인',
-      'Crew 상세의 편성 이력과 책임자 이력에서 처리한 사람과 시각을 확인',
+      'capo1로 로그인 → Swagger에서 POST /api/tasks/{강북 정기 순찰 ID}/evaluations',
+      '계획 상태 업무라 409로 거부된다 (완료된 업무만 평가)',
+      'capo2로 로그인 → 평가 → 작성할 평가의 강남 정보 수집 → 참여자 평가에서 soldier1을 평가하면 성공한다',
+    ],
+  },
+  {
+    rule: 'BR-10', title: '평가 이의 제기와 정정 이력',
+    steps: [
+      'soldier1이 underboss1에게 받은 강남 정보 수집 평가에 낸 이의(대기)를 boss로 [평가] → 처리할 이의 제기에서 정정한다',
+      '평가 상세의 수정·정정 이력에 변경 전후 점수와 사유가 남는다',
+      'soldier1의 구성원 화면 변경 이력에 평가 정정이 시간순으로 추가된다',
+    ],
+  },
+  {
+    rule: 'BR-10', title: '역할·소속·상태·평가 변경 이력',
+    steps: [
+      'boss로 구성원 → associate1 상세의 변경 이력에서 계정 등록·소속·징계 기록을 시간순으로 확인',
+      '역할을 바꾸면 변경 이력에 이전 역할 → 새 역할과 사유가 바로 추가된다',
+      'Crew 상세의 편성 이력·책임자 이력·Crew 활동에서 처리한 사람과 시각을 확인',
     ],
   },
   {
     rule: 'BR-09', title: '권한 없는 직접 접근 차단',
     steps: [
       'associate1로 로그인 → 주소창에 /users 입력 → 403 화면 (보안 이벤트로 기록)',
-      'Swagger에서 토큰 없이 API를 호출하면 401',
+      'boss로 로그인 → 주소창에 /admin 입력 → 403 화면. Swagger에서 boss 토큰으로 GET /api/admin/accounts를 호출해도 403',
+      'admin으로 감사 기록 → 권한 거부 기록에서 위 시도를 확인. 토큰 없이 API를 호출하면 401',
+    ],
+  },
+  {
+    rule: 'FR-23', title: '계정 잠금과 역할별 권한 즉시 반영',
+    steps: [
+      'admin으로 관리자 → soldier2 잠금 → soldier2로 로그인하면 "잠긴 계정" 메시지 (다시 잠금 해제)',
+      '관리자 → 역할별 권한 → Soldier에서 resource.read를 빼고 저장 → soldier1의 [자원] 메뉴가 사라지고 /resources는 403',
+      '기본값이 허용인 것만 체크해 다시 저장하면 원래대로 돌아온다',
     ],
   },
 ];

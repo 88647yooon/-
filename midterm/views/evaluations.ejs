@@ -1,0 +1,150 @@
+<%- include('partials/head') %>
+<h1>평가 <span class="tag">FR-18 · FR-19 · BR-10</span></h1>
+
+<% if (pending) { %>
+  <section class="card">
+    <h2>작성해야 할 평가 <span class="tag">FR-18</span></h2>
+    <% if (pending.length) { %>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>업무</th><th>대상자</th><th>완료</th><th>평가 기한</th><th></th></tr></thead>
+          <tbody>
+            <% pending.forEach((p) => { %>
+              <tr>
+                <td><a href="/tasks/<%= p.task.id %>"><%= p.task.title %></a><%= p.task.crew ? ' · ' + p.task.crew.name : '' %></td>
+                <td><%- include('partials/who', { u: p.evaluatee }) %></td>
+                <td class="small"><%= fmt(p.completedAt) %></td>
+                <td class="small"><%= fmt(p.deadline) %></td>
+                <td><a class="small" href="/tasks/<%= p.task.id %>#evaluations">평가하기</a></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } else { %><p class="muted">작성할 평가가 없습니다.</p><% } %>
+    <p class="hint">최근 30일 안에 완료된 내 관리 업무<%= me.role === 'CAPO' ? '(내 Crew 업무)' : '' %>에 실제로 참여한 구성원입니다. 완료되지 않은 업무는 평가할 수 없습니다(409).</p>
+  </section>
+<% } %>
+
+<% if (can('evaluation.appeal.resolve')) { %>
+  <section class="card">
+    <h2>처리할 이의 제기 <span class="tag">FR-18 · BR-10</span></h2>
+    <% if (openAppeals.length) { %>
+      <% openAppeals.forEach((a) => { %>
+        <div class="forms">
+          <div>
+            <p><strong><%= a.appellant.name %></strong> <span class="muted small">@<%= a.appellant.username %></span> · <%= a.task.title %> · <%= fmt(a.createdAt) %></p>
+            <p><%= a.reason %></p>
+            <p class="small"><a href="/evaluations/<%= a.evaluationId %>">평가 상세 보기</a></p>
+          </div>
+          <form method="post" action="/evaluation-appeals/<%= a.id %>/resolve">
+            <div class="form-row">
+              <select name="decision"><option value="DISMISS">기각</option><option value="CORRECT">평가 정정</option></select>
+              <input name="note" required maxlength="500" placeholder="처리 사유">
+            </div>
+            <div class="form-row">
+              <% criteria.forEach((c) => { %><label><%= c.label %> <input name="score_<%= c.key %>" type="number" min="1" max="5" size="2"></label><% }) %>
+            </div>
+            <button class="small">처리</button>
+            <p class="hint">정정할 때는 점수를 모든 항목에 넣으세요(평가 상세에서 지금 점수를 확인). 이의를 낸 본인과 그 평가의 평가자는 처리할 수 없습니다.</p>
+          </form>
+        </div>
+      <% }) %>
+    <% } else { %><p class="muted">처리 대기 중인 이의 제기가 없습니다.</p><% } %>
+  </section>
+<% } %>
+
+<section class="card">
+  <h2>내가 낸 이의 제기 <span class="tag">FR-19</span></h2>
+  <% if (myAppeals.length) { %>
+    <ul>
+      <% myAppeals.forEach((a) => { %>
+        <li><a href="/evaluations/<%= a.evaluationId %>"><%= a.task.title %></a> <span class="badge"><%= a.statusLabel %></span> <%= a.reason %>
+          <% if (a.resolutionNote) { %><span class="muted small">— <%= a.resolvedBy ? a.resolvedBy.name : '' %>: <%= a.resolutionNote %></span><% } %></li>
+      <% }) %>
+    </ul>
+  <% } else { %><p class="muted">낸 이의 제기가 없습니다. 받은 평가는 <a href="/users/<%= me.id %>#evaluations">내 구성원 화면</a>에서 확인하고 이의를 낼 수 있습니다.</p><% } %>
+</section>
+
+<% if (evaluations) { %>
+  <section class="card">
+    <h2>평가 검색 <span class="tag">FR-19 · FR-21</span></h2>
+    <form method="get" action="/evaluations" class="form-row">
+      <label>대상자 ID <input name="evaluateeId" type="number" min="1" size="5" value="<%= query.evaluateeId || '' %>"></label>
+      <label>평가자 ID <input name="evaluatorId" type="number" min="1" size="5" value="<%= query.evaluatorId || '' %>"></label>
+      <label>상태
+        <select name="status"><option value="">전체</option><% Object.entries(C.EVALUATION_STATUS_INFO).forEach(([key, info]) => { %><option value="<%= key %>" <%= query.status === key ? 'selected' : '' %>><%= info.label %></option><% }) %></select>
+      </label>
+      <label>시작 <input name="from" type="datetime-local" value="<%= query.from || '' %>"></label>
+      <label>끝 <input name="to" type="datetime-local" value="<%= query.to || '' %>"></label>
+      <label>정렬
+        <select name="sort"><% [['-createdAt', '최근 순'], ['-totalScore', '점수 높은 순'], ['totalScore', '점수 낮은 순']].forEach(([v, l]) => { %><option value="<%= v %>" <%= query.sort === v ? 'selected' : '' %>><%= l %></option><% }) %></select>
+      </label>
+      <button>검색</button>
+    </form>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>업무</th><th>대상자</th><th>평가자</th><th>점수</th><th>상태</th><th>작성</th></tr></thead>
+        <tbody>
+          <% evaluations.forEach((e) => { %>
+            <tr class="<%= e.status === 'WITHDRAWN' ? 'dim' : '' %>">
+              <td><a href="/evaluations/<%= e.id %>"><%= e.task.title %></a></td>
+              <td><%= e.evaluatee.name %> <span class="muted small">@<%= e.evaluatee.username %></span></td>
+              <td class="small"><%= e.evaluator.name %></td>
+              <td><strong><%= e.totalScore %></strong><%= e.revisionCount ? ` (수정 ${e.revisionCount})` : '' %></td>
+              <td><span class="badge"><%= e.statusLabel %></span></td>
+              <td class="small"><%= fmt(e.createdAt) %></td>
+            </tr>
+          <% }) %>
+          <% if (!evaluations.length) { %><tr><td colspan="6" class="muted">조건에 맞는 평가가 없습니다.</td></tr><% } %>
+        </tbody>
+      </table>
+    </div>
+    <%- include('partials/pager', { meta }) %>
+  </section>
+<% } %>
+
+<div class="cols">
+  <section class="card">
+    <h2>평가 항목 <span class="tag">FR-18</span></h2>
+    <table>
+      <thead><tr><th>키</th><th>항목</th><th>가중치</th><th>설명</th></tr></thead>
+      <tbody>
+        <% criteria.forEach((c) => { %><tr><td class="mono small"><%= c.key %></td><td><%= c.label %></td><td><%= c.weight %></td><td class="small"><%= c.description || '' %></td></tr><% }) %>
+      </tbody>
+    </table>
+    <p class="hint">점수는 항목마다 1~5점이고, 총점은 가중치로 낸 평균입니다.</p>
+    <% if (can('evaluationCriteria.manage')) { %>
+      <form method="post" action="/evaluation-criteria">
+        <h3>항목 설정 (Boss·Administrator)</h3>
+        <% for (let i = 0; i < criteria.length + 2; i += 1) { const c = criteria[i] || {}; %>
+          <div class="form-row">
+            <input name="key_<%= i %>" value="<%= c.key || '' %>" placeholder="키 (영문)" size="10">
+            <input name="label_<%= i %>" value="<%= c.label || '' %>" placeholder="항목 이름" size="10">
+            <input name="weight_<%= i %>" type="number" min="1" max="10" value="<%= c.weight || '' %>" placeholder="가중치" size="3">
+            <input name="description_<%= i %>" value="<%= c.description || '' %>" placeholder="설명" size="24">
+          </div>
+        <% } %>
+        <button class="small">항목 저장</button>
+        <p class="hint">키를 비운 줄은 빠집니다. 이미 작성된 평가는 작성 당시 항목을 그대로 가집니다.</p>
+      </form>
+    <% } %>
+  </section>
+
+  <% if (rankings.length) { %>
+    <section class="card">
+      <h2>평판 순위 <span class="tag">FR-22</span></h2>
+      <table>
+        <thead><tr><th>순위</th><th>구성원</th><th>Crew</th><th>평판</th><th>평가 (건)</th><th>공로·징계</th></tr></thead>
+        <tbody>
+          <% rankings.forEach((r) => { %>
+            <tr><td><%= r.rank %></td><td><%- include('partials/who', { u: r.user }) %></td><td class="small"><%= r.crew ? r.crew.name : '-' %></td>
+              <td><strong><%= r.reputationScore %></strong></td><td class="small"><%= r.averageScore ?? '-' %> (<%= r.evaluationCount %>)</td><td class="small"><%= r.eventPoints %></td></tr>
+          <% }) %>
+        </tbody>
+      </table>
+      <p class="hint">평판 점수 = 평균 평가 점수 × 20 + 공로·징계 점수 합계 (0~100, 평가가 없으면 평가 부분 50). 상위 10명입니다.</p>
+    </section>
+  <% } %>
+</div>
+<%- include('partials/foot') %>

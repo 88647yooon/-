@@ -70,6 +70,8 @@ describe('인증 API (#1~#5)', () => {
     const b = await t.api('POST', '/api/auth/login', { body: { username: 'soldier3', password: 'x' } });
     expectError(a, 401, 'UNAUTHENTICATED');
     assert.equal(a.body.error.message, b.body.error.message);
+    // 연속 실패 횟수가 쌓여 자동 잠금 기준(운영 설정)에 걸리지 않도록, 성공한 로그인으로 실패 횟수를 되돌린다.
+    await t.login('soldier3');
   });
 
   it('정지·탈퇴 계정은 로그인할 수 없다 (403), 대기 계정은 로그인할 수 있다', async () => {
