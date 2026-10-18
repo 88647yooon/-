@@ -142,7 +142,7 @@ router.delete(
  *       from·to는 그 기간에 작성된 평가와 공로·징계 기록으로 집계를 좁힌다. Underboss·Boss만 볼 수 있다.
  *     parameters:
  *       - { name: crewId, in: query, schema: { type: integer, minimum: 1 } }
- *       - $ref: '#/components/parameters/RoleFilter'
+ *       - { name: role, in: query, description: 역할 (Administrator 제외), schema: { $ref: '#/components/schemas/AssignableRole' } }
  *       - $ref: '#/components/parameters/From'
  *       - $ref: '#/components/parameters/To'
  *       - $ref: '#/components/parameters/Page'

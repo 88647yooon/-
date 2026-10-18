@@ -1,8 +1,48 @@
 <%- include('partials/head') %>
-<h1>업무 <span class="tag">FR-07 · FR-12</span></h1>
+<%- include('partials/crumbs') %>
+<div class="page-head">
+  <div>
+    <h1>업무 관리</h1>
+    <p class="page-desc"><%= me.role === 'CAPO' ? '내가 책임자인 Crew의 업무를 등록하고 진행 상황을 관리합니다.' : '모든 Crew 업무와 조직 업무를 등록하고 진행 상황을 관리합니다.' %></p>
+  </div>
+</div>
+
+<% if (can('task.create')) { %>
+  <details class="drawer">
+    <summary class="button">＋ 업무 등록</summary>
+    <section class="card">
+    <h2>업무 등록</h2>
+    <form method="post" action="/tasks">
+      <div class="form-row">
+        <label>제목 <input name="title" required maxlength="100"></label>
+        <label>유형
+          <select name="typeId"><option value="">없음</option><% types.forEach((t) => { %><option value="<%= t.id %>"><%= t.name %></option><% }) %></select>
+        </label>
+        <% if (me.role !== 'CAPO') { %>
+          <label>Crew
+            <select name="crewId"><option value="">조직 업무 (Crew 없음)</option><% crews.forEach((c) => { %><option value="<%= c.id %>"><%= c.name %></option><% }) %></select>
+          </label>
+        <% } %>
+        <label>중요도
+          <select name="priority"><% Object.entries(C.TASK_PRIORITY_INFO).forEach(([key, info]) => { %><option value="<%= key %>" <%= key === 'MEDIUM' ? 'selected' : '' %>><%= info.label %></option><% }) %></select>
+        </label>
+      </div>
+      <div class="form-row">
+        <label>시작 <input name="startAt" type="datetime-local" required></label>
+        <label>종료 <input name="endAt" type="datetime-local" required></label>
+        <label>장소 <input name="location" maxlength="100"></label>
+        <label>필요 인원 <input name="requiredHeadcount" type="number" min="1" max="100"></label>
+        <label>설명 <input name="description" maxlength="2000"></label>
+      </div>
+      <button>등록</button>
+      <p class="hint">시각은 한국 시간입니다. <%= me.role === 'CAPO' ? '업무는 내가 책임자인 Crew의 업무로 등록됩니다.' : '' %> 등록한 업무는 계획 상태이며, 참여자를 배정한 뒤 시작합니다.</p>
+    </form>
+  </section>
+  </details>
+<% } %>
 
 <section class="card">
-  <form method="get" action="/tasks" class="form-row">
+  <form method="get" action="/tasks" class="form-row filters">
     <label>검색 <input name="q" value="<%= query.q || '' %>" placeholder="제목·설명·장소"></label>
     <label>상태
       <select name="status">
@@ -33,7 +73,6 @@
     </label>
     <button>조회</button>
   </form>
-  <p class="hint"><%= me.role === 'CAPO' ? 'Capo는 자신이 책임자인 Crew의 업무만 봅니다.' : 'Underboss·Boss는 모든 Crew 업무와 조직 업무를 봅니다.' %></p>
 
   <div class="table-wrap">
     <table>
@@ -49,41 +88,11 @@
             <td><%= t.acceptedCount %>/<%= t.assigneeCount %><%= t.requiredHeadcount ? ` (필요 ${t.requiredHeadcount})` : '' %></td>
           </tr>
         <% }) %>
-        <% if (!tasks.length) { %><tr><td colspan="6" class="muted">조건에 맞는 업무가 없습니다.</td></tr><% } %>
+        <% if (!tasks.length) { %><tr><td colspan="6" class="empty">조건에 맞는 업무가 없습니다.</td></tr><% } %>
       </tbody>
     </table>
   </div>
   <%- include('partials/pager', { meta }) %>
 </section>
 
-<% if (can('task.create')) { %>
-  <section class="card">
-    <h2>업무 등록 <span class="tag">FR-07</span></h2>
-    <form method="post" action="/tasks">
-      <div class="form-row">
-        <label>제목 <input name="title" required maxlength="100"></label>
-        <label>유형
-          <select name="typeId"><option value="">없음</option><% types.forEach((t) => { %><option value="<%= t.id %>"><%= t.name %></option><% }) %></select>
-        </label>
-        <% if (me.role !== 'CAPO') { %>
-          <label>Crew
-            <select name="crewId"><option value="">조직 업무 (Crew 없음)</option><% crews.forEach((c) => { %><option value="<%= c.id %>"><%= c.name %></option><% }) %></select>
-          </label>
-        <% } %>
-        <label>중요도
-          <select name="priority"><% Object.entries(C.TASK_PRIORITY_INFO).forEach(([key, info]) => { %><option value="<%= key %>" <%= key === 'MEDIUM' ? 'selected' : '' %>><%= info.label %></option><% }) %></select>
-        </label>
-      </div>
-      <div class="form-row">
-        <label>시작 <input name="startAt" type="datetime-local" required></label>
-        <label>종료 <input name="endAt" type="datetime-local" required></label>
-        <label>장소 <input name="location" maxlength="100"></label>
-        <label>필요 인원 <input name="requiredHeadcount" type="number" min="1" max="100"></label>
-        <label>설명 <input name="description" maxlength="2000"></label>
-      </div>
-      <button>등록</button>
-      <p class="hint">시각은 한국 시간입니다. <%= me.role === 'CAPO' ? '업무는 자신이 책임자인 Crew의 업무로 만들어집니다.' : '' %> 등록한 업무는 계획 상태이며, 구성원을 배정한 뒤 시작할 수 있습니다.</p>
-    </form>
-  </section>
-<% } %>
 <%- include('partials/foot') %>

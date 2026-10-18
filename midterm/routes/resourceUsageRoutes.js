@@ -31,7 +31,7 @@ const usageParams = { params: { usageId: fields.id } };
  *           schema:
  *             type: object
  *             properties:
- *               taskId: { type: integer, description: '업무 자원 할당으로 사용할 때 그 업무 ID (생략하면 자동으로 찾는다)' }
+ *               taskId: { type: integer, minimum: 1, example: 2, description: '업무 자원 할당으로 사용할 때 그 업무 ID (생략하면 자동으로 찾는다)' }
  *     responses:
  *       201: { $ref: '#/components/responses/UsageOne' }
  *       400: { $ref: '#/components/responses/BadRequest' }
@@ -187,7 +187,7 @@ router.patch('/resource-usages/:usageId', requirePermission('resource.allocate')
  *             type: object
  *             required: [toUserId]
  *             properties:
- *               toUserId: { type: integer, example: 9 }
+ *               toUserId: { type: integer, minimum: 1, example: 9 }
  *               dueAt: { type: string, format: date-time, description: '받는 사람의 반환 예정 시각 (생략하면 지금 예정 시각 그대로)' }
  *               note: { type: string, maxLength: 500 }
  *     responses:

@@ -164,7 +164,7 @@ router.delete('/accounts/:userId/sessions', accounts, validate({ ...userParams, 
  *       - { name: userId, in: query, schema: { type: integer, minimum: 1 } }
  *       - { name: q, in: query, description: 아이디 검색어, schema: { type: string, maxLength: 50 } }
  *       - { name: success, in: query, schema: { type: boolean } }
- *       - { name: reason, in: query, schema: { type: string, example: WRONG_PASSWORD } }
+ *       - { name: reason, in: query, schema: { type: string, maxLength: 40, example: WRONG_PASSWORD } }
  *       - $ref: '#/components/parameters/From'
  *       - $ref: '#/components/parameters/To'
  *       - $ref: '#/components/parameters/Page'
@@ -223,7 +223,7 @@ router.get('/permissions', requirePermission('admin.permissions'), ctrl.permissi
  *             type: object
  *             required: [keys]
  *             properties:
- *               keys: { type: array, items: { type: string }, example: [me.read, me.update, session.manage, reference.read, crew.read] }
+ *               keys: { type: array, maxItems: 200, items: { type: string, maxLength: 80 }, example: [me.read, me.update, session.manage, reference.read, crew.read] }
  *               reason: { type: string, maxLength: 500 }
  *     responses:
  *       200: { $ref: '#/components/responses/RolePermissionsOne' }

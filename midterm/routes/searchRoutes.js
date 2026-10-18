@@ -26,7 +26,7 @@ const searchParams = { params: { searchId: fields.docId } };
  *       types로 종류를 고르고, page·size(기본 5)는 종류마다 적용한다.
  *     parameters:
  *       - { name: q, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 50 }, example: 강북 }
- *       - { name: types, in: query, description: '쉼표로 구분 (users, crews, tasks, resources). 생략하면 전부', schema: { type: string, example: 'tasks,resources' } }
+ *       - { name: types, in: query, description: '쉼표로 구분 (users, crews, tasks, resources). 생략하면 전부', style: form, explode: false, schema: { type: array, maxItems: 4, items: { type: string, enum: [users, crews, tasks, resources] }, example: [tasks, resources] } }
  *       - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
  *       - { name: size, in: query, description: 종류마다 보여 줄 수, schema: { type: integer, minimum: 1, maximum: 50, default: 5 } }
  *     responses:
@@ -53,8 +53,8 @@ router.get('/search', requirePermission('search.use'), validate({ query: { q, ty
  *             required: [name, q]
  *             properties:
  *               name: { type: string, maxLength: 50, example: 강북 업무·자원 }
- *               q: { type: string, maxLength: 50, example: 강북 }
- *               types: { type: array, items: { type: string, enum: [users, crews, tasks, resources] }, example: [tasks, resources] }
+ *               q: { type: string, minLength: 1, maxLength: 50, example: 강북 }
+ *               types: { type: array, maxItems: 4, items: { type: string, enum: [users, crews, tasks, resources] }, example: [tasks, resources] }
  *     responses:
  *       201: { $ref: '#/components/responses/SavedSearchOne' }
  *       400: { $ref: '#/components/responses/BadRequest' }

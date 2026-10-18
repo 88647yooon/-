@@ -1,4 +1,4 @@
-// 업무 웹 화면 (CR-02). 단계 3의 기능 요구사항(FR-07~FR-12)과 업무 자원 할당(FR-17)을 브라우저에서 확인할 수 있게 한다.
+// 업무 웹 화면 (CR-02): 업무 관리, 업무 상세, 내 업무 (FR-07~FR-12, 업무 자원 할당 FR-17).
 // REST API와 같은 서비스 계층을 호출하므로 배정 규칙(BR-02·BR-03), 완료 업무 잠금(BR-06), 자원 규칙(BR-07·BR-08)이 API와 똑같이 적용된다.
 // 자원 할당 폼의 처리는 webResourceController가 맡는다.
 const taskService = require('../services/taskService');
@@ -28,7 +28,7 @@ async function tasksPage(req, res) {
     taskTypeService.list(),
     crewService.list(req.user, { status: 'ACTIVE', page: 1, size: 100, sort: 'name' }),
   ]);
-  res.render('tasks', { title: '업무', tasks: result.data, meta: result.meta, query, types, crews: crews.data });
+  res.render('tasks', { title: '업무 관리', tasks: result.data, meta: result.meta, query, types, crews: crews.data });
 }
 
 async function taskPage(req, res) {

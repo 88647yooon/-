@@ -32,7 +32,7 @@ const allocationParams = { params: { taskId: fields.id, resourceId: fields.id } 
  *             type: object
  *             required: [resourceId]
  *             properties:
- *               resourceId: { type: integer, example: 1 }
+ *               resourceId: { type: integer, minimum: 1, example: 1 }
  *               startAt: { type: string, format: date-time, description: '생략하면 업무 시작 시각' }
  *               endAt: { type: string, format: date-time, description: '생략하면 업무 종료 시각' }
  *               note: { type: string, maxLength: 200 }

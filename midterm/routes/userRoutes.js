@@ -38,12 +38,12 @@ const newUserFields = {
  *             type: object
  *             required: [username, password, name]
  *             properties:
- *               username: { type: string, example: new.member }
- *               password: { type: string, example: Welcome2026 }
+ *               username: { type: string, pattern: '^[a-z0-9._-]{3,50}$', example: new.member }
+ *               password: { type: string, pattern: '^(?=.*[A-Za-z])(?=.*\d)', minLength: 8, maxLength: 72, example: Welcome2026 }
  *               name: { type: string, maxLength: 50, example: Tony Russo }
- *               nickname: { type: string, nullable: true, maxLength: 50 }
- *               phone: { type: string, nullable: true, example: 010-2000-0001 }
- *               email: { type: string, nullable: true, format: email }
+ *               nickname: { type: string, minLength: 1, nullable: true, maxLength: 50 }
+ *               phone: { type: string, pattern: '^[0-9+\-\s]{7,20}$', nullable: true, example: 010-2000-0001 }
+ *               email: { type: string, maxLength: 100, nullable: true, format: email }
  *     responses:
  *       201: { $ref: '#/components/responses/UserOne' }
  *       400: { $ref: '#/components/responses/BadRequest' }
@@ -104,12 +104,12 @@ router.get(
  *                   type: object
  *                   required: [username, password, name]
  *                   properties:
- *                     username: { type: string }
- *                     password: { type: string }
- *                     name: { type: string }
- *                     nickname: { type: string, nullable: true }
- *                     phone: { type: string, nullable: true }
- *                     email: { type: string, nullable: true }
+ *                     username: { type: string, pattern: '^[a-z0-9._-]{3,50}$' }
+ *                     password: { type: string, pattern: '^(?=.*[A-Za-z])(?=.*\d)', minLength: 8, maxLength: 72 }
+ *                     name: { type: string, maxLength: 50 }
+ *                     nickname: { type: string, minLength: 1, maxLength: 50, nullable: true }
+ *                     phone: { type: string, pattern: '^[0-9+\-\s]{7,20}$', nullable: true }
+ *                     email: { type: string, format: email, maxLength: 100, nullable: true }
  *             example:
  *               users:
  *                 - { username: bulk.one, password: Welcome2026, name: Bulk One }
@@ -149,7 +149,7 @@ router.post(
  *     description: |
  *       [FR-01] 구성원 등록 전에 아이디를 쓸 수 있는지 확인한다. 형식이 맞지 않으면 400을 돌려준다.
  *     parameters:
- *       - { name: username, in: query, required: true, schema: { type: string, example: new.member } }
+ *       - { name: username, in: query, required: true, schema: { type: string, pattern: '^[a-z0-9._-]{3,50}$', example: new.member } }
  *     responses:
  *       200:
  *         description: 확인 성공
@@ -210,9 +210,9 @@ router.get(
  *             minProperties: 1
  *             properties:
  *               name: { type: string, maxLength: 50 }
- *               nickname: { type: string, nullable: true, maxLength: 50 }
- *               phone: { type: string, nullable: true }
- *               email: { type: string, nullable: true, format: email }
+ *               nickname: { type: string, minLength: 1, nullable: true, maxLength: 50 }
+ *               phone: { type: string, pattern: '^[0-9+\-\s]{7,20}$', example: 010-2000-0001, nullable: true }
+ *               email: { type: string, maxLength: 100, nullable: true, format: email }
  *     responses:
  *       200: { $ref: '#/components/responses/UserOne' }
  *       400: { $ref: '#/components/responses/BadRequest' }
@@ -242,6 +242,7 @@ router.get(
  *                   properties:
  *                     id: { type: integer }
  *                     deleted: { type: boolean, example: true }
+ *       400: { $ref: '#/components/responses/BadRequest' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }

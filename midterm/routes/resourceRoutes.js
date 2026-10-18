@@ -163,9 +163,9 @@ router.get('/available', requirePermission('resource.read'), validate({ query: {
  *             type: object
  *             minProperties: 1
  *             properties:
- *               code: { type: string, maxLength: 30 }
- *               name: { type: string, maxLength: 100 }
- *               categoryId: { type: integer }
+ *               code: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,29}$', maxLength: 30 }
+ *               name: { type: string, minLength: 1, maxLength: 100 }
+ *               categoryId: { type: integer, minimum: 1, example: 1 }
  *               location: { type: string, nullable: true, maxLength: 100 }
  *               description: { type: string, nullable: true, maxLength: 1000 }
  *     responses:

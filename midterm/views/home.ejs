@@ -1,120 +1,173 @@
 <%- include('partials/head') %>
-<section class="hero">
-  <h1>The Family 통합 정보시스템</h1>
-  <p>구성원과 Crew, 업무, 공용 자원, 평가를 한곳에서 관리하는 웹 기반 통합 정보시스템입니다. <span class="muted">학번 202211207</span></p>
-  <p class="muted">
-    이 화면에서 단계 1~6의 기능 요구사항을 직접 확인할 수 있습니다. 화면은 REST API와 같은 서비스 계층을 쓰므로
-    권한 검사와 업무 규칙이 API와 똑같이 적용됩니다. 모든 API는 <a href="/api-docs">Swagger API 문서</a>에서 실행할 수 있습니다.
-  </p>
-</section>
+<% const dateLabel = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', dateStyle: 'full' }).format(now); %>
+<% const shortDate = (v) => new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', weekday: 'short' }).format(new Date(v)); %>
+<% const shortTime = (v) => new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(v)); %>
+<div class="welcome">
+  <div>
+    <h1><%= profile.name %>님, 안녕하세요</h1>
+    <p class="page-desc">
+      <span class="badge role"><%= profile.roleLabel %></span>
+      <% if (profile.leadership.capoOf) { %><a href="/crews/<%= profile.leadership.capoOf.id %>"><%= profile.leadership.capoOf.name %></a> 책임자
+      <% } else if (profile.crew) { %><a href="/crews/<%= profile.crew.id %>"><%= profile.crew.name %></a> 소속
+      <% } else if (profile.role !== 'ADMIN') { %>정식 소속 없음<% } else { %>시스템 관리자<% } %>
+      <% if (profile.leadership.underbossOf.length) { %> · 담당 Crew <%= profile.leadership.underbossOf.length %>곳<% } %>
+    </p>
+  </div>
+  <div class="today"><%= dateLabel %></div>
+</div>
 
-<% if (profile) { %>
-  <section class="card">
-    <h2>현재 로그인한 구성원</h2>
-    <dl class="facts">
-      <dt>이름</dt><dd><%= profile.name %> <span class="muted">@<%= profile.username %></span></dd>
-      <dt>역할</dt><dd><span class="badge role"><%= profile.roleLabel %></span></dd>
-      <dt>상태</dt><dd><span class="badge status-<%= profile.status %>"><%= profile.statusLabel %></span></dd>
-      <dt>정식 소속</dt>
-      <dd>
-        <% if (profile.crew) { %>
-          <a href="/crews/<%= profile.crew.id %>"><%= profile.crew.name %></a>
-          <span class="muted">· 책임자 <%= profile.crew.capo ? profile.crew.capo.name : '없음' %></span>
-        <% } else { %><span class="muted">없음</span><% } %>
-      </dd>
-    </dl>
-    <p><a class="button" href="/me">내 정보 보기</a></p>
-  </section>
-<% } else { %>
-  <section class="card">
-    <h2>로그인</h2>
-    <form method="post" action="/login" class="form-row">
-      <input name="username" placeholder="아이디 (예: boss)" autocomplete="username" required>
-      <input name="password" type="password" placeholder="비밀번호" autocomplete="current-password" required>
-      <input type="hidden" name="next" value="/">
-      <button>로그인</button>
-    </form>
-    <p class="hint">아래 테스트 계정 표의 [로그인] 버튼으로 바로 로그인할 수 있습니다. 테스트 계정의 비밀번호는 모두 <code><%= seedPassword %></code>입니다.</p>
-  </section>
+<% if (system) { %>
+  <%# 시스템 관리자 %>
+  <div class="stat-row">
+    <a class="stat" href="/admin"><div class="label">시스템 상태</div><div class="value"><span class="badge <%= system.health.status === 'ok' ? 'ok' : 'bad' %>"><%= system.health.status === 'ok' ? '정상' : '점검 필요' %></span></div>
+      <div class="sub">MySQL <%= system.health.mysql.ok ? system.health.mysql.latencyMs + 'ms' : '오류' %> · MongoDB <%= system.health.mongodb.ok ? system.health.mongodb.latencyMs + 'ms' : '오류' %></div></a>
+    <a class="stat" href="/admin"><div class="label">데이터 무결성</div><div class="value"><span class="badge <%= system.integrity.ok ? 'ok' : 'bad' %>"><%= system.integrity.ok ? '이상 없음' : '확인 필요' %></span></div>
+      <div class="sub">점검 항목 <%= system.integrity.checks.length %>개</div></a>
+    <a class="stat" href="/admin?locked=true"><div class="label">잠긴 계정</div><div class="value"><%= system.lockedCount %></div><div class="sub">계정 보안 현황에서 관리</div></a>
+    <div class="stat"><div class="label">가동 시간</div><div class="value"><%= Math.floor(system.health.uptimeSeconds / 3600) %><small class="muted">시간</small> <%= Math.floor(system.health.uptimeSeconds / 60) % 60 %><small class="muted">분</small></div><div class="sub">Node.js <%= system.health.node %></div></div>
+  </div>
+  <div class="cols-2-1">
+    <div>
+      <section class="card">
+        <div class="card-head"><h2>최근 로그인 실패</h2><a class="more" href="/admin?loginFailed=true#history">전체 보기</a></div>
+        <% if (system.failedLogins.length) { %>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>시각</th><th>아이디</th><th>사유</th><th>IP</th></tr></thead>
+              <tbody>
+                <% system.failedLogins.forEach((h) => { %>
+                  <tr><td class="small"><%= fmt(h.at) %></td><td class="mono small"><%= h.username %></td><td class="small"><%= loginReason(h.reason) %></td><td class="mono small"><%= h.ip || '-' %></td></tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } else { %><p class="empty">최근 로그인 실패가 없습니다.</p><% } %>
+      </section>
+    </div>
+    <div>
+      <section class="card">
+        <h2>바로 가기</h2>
+        <div class="quick">
+          <a href="/admin"><%- include('partials/icon', { name: 'sliders' }) %>시스템 관리</a>
+          <a href="/admin#permissions"><%- include('partials/icon', { name: 'key' }) %>역할별 권한</a>
+          <% if (can('user.list')) { %><a href="/users"><%- include('partials/icon', { name: 'users' }) %>구성원</a><% } %>
+          <% if (can('audit.read')) { %><a href="/audit-logs"><%- include('partials/icon', { name: 'file' }) %>감사 기록</a><% } %>
+        </div>
+      </section>
+    </div>
+  </div>
+<% } else if (summary && summary.ok) { %>
+  <% const d = summary.value; %>
+  <% const todo = [
+    { label: '응답하지 않은 업무 배정', count: d.todo.awaitingMyResponse, href: '/my-tasks' },
+    { label: '내가 받은 교대 요청', count: d.todo.swapRequestsToMe, href: '/my-tasks#swaps' },
+    d.todo.evaluationsToWrite !== undefined && { label: '작성할 평가', count: d.todo.evaluationsToWrite, href: '/evaluations' },
+    d.todo.appealsToResolve !== undefined && { label: '처리할 평가 이의 제기', count: d.todo.appealsToResolve, href: '/evaluations#appeals' },
+    approvals.roleRequests !== null && { label: '승인 대기 역할 변경 요청', count: approvals.roleRequests, href: '/role-requests?status=PENDING' },
+    approvals.resourceRequests !== null && { label: '처리할 자원 사용 신청', count: approvals.resourceRequests, href: '/my-resources#review' },
+    can('resource.request') && { label: '내 자원 사용 신청 (처리 대기)', count: d.todo.myPendingResourceRequests, href: '/my-resources#requests' },
+  ].filter(Boolean); %>
+  <% const todoTotal = todo.reduce((n, t) => n + t.count, 0); %>
+  <div class="stat-row">
+    <a class="stat" href="/my-tasks"><div class="label">진행할 업무</div><div class="value"><%= d.tasks.openCount %></div><div class="sub">지금 진행 중 <%= d.tasks.inProgressCount %>건</div></a>
+    <% if (can('resource.use')) { %>
+      <a class="stat" href="/my-resources"><div class="label">사용 중인 자원</div><div class="value"><%= d.resources.inUse.length %></div><div class="sub">2주 안 배정 <%= d.resources.upcomingAllocations.length %>건</div></a>
+    <% } %>
+    <a class="stat" href="/users/<%= me.id %>"><div class="label">평판 점수</div><div class="value"><%= d.evaluations.reputationScore ?? '-' %></div><div class="sub">최근 평가 <%= d.evaluations.recent.map((e) => e.totalScore + '점').join(', ') || '없음' %></div></a>
+    <div class="stat"><div class="label">처리할 일</div><div class="value"><%= todoTotal %></div><div class="sub"><%= todoTotal ? '아래 목록에서 바로 처리하세요' : '모두 처리했습니다' %></div></div>
+  </div>
+
+  <div class="cols-2-1">
+    <div>
+      <section class="card">
+        <div class="card-head"><h2>다가오는 일정</h2><a class="more" href="/my-tasks">2주 일정 전체</a></div>
+        <% if (d.tasks.upcoming.length || d.resources.upcomingAllocations.length) { %>
+          <ul class="list">
+            <% d.tasks.upcoming.forEach((t) => { %>
+              <li>
+                <span class="when"><%= shortDate(t.startAt) %><br><%= shortTime(t.startAt) %>~<%= shortTime(t.endAt) %></span>
+                <span class="what"><a href="/tasks/<%= t.id %>"><%= t.title %></a><small><%= t.crew ? t.crew.name : '조직 업무' %><%= t.location ? ' · ' + t.location : '' %></small></span>
+                <span class="end"><span class="badge task-<%= t.status %>"><%= t.statusLabel %></span></span>
+              </li>
+            <% }) %>
+            <% d.resources.upcomingAllocations.forEach((a) => { %>
+              <li>
+                <span class="when"><%= shortDate(a.startAt) %><br><%= shortTime(a.startAt) %>~<%= shortTime(a.endAt) %></span>
+                <span class="what"><a href="/resources/<%= a.resource.id %>"><%= a.resource.name %></a><small>자원 배정<%= a.purpose ? ' · ' + a.purpose : '' %></small></span>
+                <span class="end"><span class="badge info">자원</span></span>
+              </li>
+            <% }) %>
+          </ul>
+        <% } else { %><p class="empty">앞으로 2주 동안 예정된 업무가 없습니다.</p><% } %>
+      </section>
+
+      <% if (alerts) { %>
+        <% const alertTotal = alerts.counts.overdueTasks + alerts.counts.overdueUsages + alerts.counts.longMaintenances; %>
+        <section class="card">
+          <div class="card-head"><h2>운영 경고 <% if (alertTotal) { %><span class="badge bad"><%= alertTotal %>건</span><% } %></h2><a class="more" href="/dashboard#alerts">운영 현황</a></div>
+          <% if (alertTotal) { %>
+            <ul class="list">
+              <% alerts.overdueTasks.slice(0, 3).forEach((t) => { %>
+                <li><span class="when">업무 지연</span><span class="what"><a href="/tasks/<%= t.id %>"><%= t.title %></a><small><%= t.crew ? t.crew.name : '조직 업무' %> · 종료 예정 <%= fmt(t.endAt) %></small></span><span class="end"><span class="badge warn"><%= t.hoursLate %>시간 지남</span></span></li>
+              <% }) %>
+              <% alerts.overdueUsages.slice(0, 3).forEach((u) => { %>
+                <li><span class="when">반환 지연</span><span class="what"><a href="/resources/<%= u.resource.id %>"><%= u.resource.name %></a><small><%= u.user ? u.user.name : '' %> · 반환 예정 <%= fmt(u.dueAt) %></small></span><span class="end"><span class="badge bad"><%= u.hoursLate %>시간 지남</span></span></li>
+              <% }) %>
+              <% alerts.longMaintenances.slice(0, 3).forEach((m) => { %>
+                <li><span class="when">장기 점검</span><span class="what"><a href="/resources/<%= m.resource.id %>"><%= m.resource.name %></a><small><%= m.reason %></small></span><span class="end"><span class="badge warn"><%= m.daysOpen %>일째</span></span></li>
+              <% }) %>
+            </ul>
+          <% } else { %><p class="empty">지연된 업무, 반환이 늦은 자원, 오래 걸리는 점검이 없습니다.</p><% } %>
+        </section>
+      <% } %>
+
+      <% if (d.evaluations.recent.length) { %>
+        <section class="card">
+          <div class="card-head"><h2>최근 받은 평가</h2><a class="more" href="/users/<%= me.id %>#evaluations">전체 보기</a></div>
+          <ul class="list">
+            <% d.evaluations.recent.forEach((e) => { %>
+              <li><span class="when"><%= shortDate(e.createdAt) %></span><span class="what"><a href="/evaluations/<%= e.id %>"><%= e.task.title %></a><small>평가자 <%= e.evaluator ? e.evaluator.name : '-' %></small></span><span class="end"><strong><%= e.totalScore %>점</strong></span></li>
+            <% }) %>
+          </ul>
+        </section>
+      <% } %>
+    </div>
+
+    <div>
+      <section class="card">
+        <h2>처리할 일</h2>
+        <ul class="list todo">
+          <% todo.forEach((t) => { %>
+            <li><span class="what"><a href="<%= t.href %>" class="<%= t.count ? '' : 'zero' %>"><%= t.label %></a></span><span class="end"><span class="count <%= t.count ? '' : 'zero' %>"><%= t.count %></span></span></li>
+          <% }) %>
+        </ul>
+      </section>
+
+      <% if (can('resource.use')) { %>
+        <section class="card">
+          <div class="card-head"><h2>사용 중인 자원</h2><a class="more" href="/my-resources">내 자원</a></div>
+          <% if (d.resources.inUse.length) { %>
+            <ul class="list">
+              <% d.resources.inUse.forEach((u) => { %>
+                <li><span class="what"><a href="/resources/<%= u.resource.id %>"><%= u.resource.name %></a><small>반환 예정 <%= fmt(u.dueAt) %></small></span>
+                  <span class="end"><% if (u.overdue) { %><span class="badge bad">반환 지연</span><% } else { %><span class="badge info">사용 중</span><% } %></span></li>
+              <% }) %>
+            </ul>
+          <% } else { %><p class="empty">사용 중인 자원이 없습니다.</p><% } %>
+        </section>
+      <% } %>
+
+      <section class="card">
+        <h2>내 소속</h2>
+        <dl class="facts">
+          <dt>정식 소속</dt><dd><% if (profile.crew) { %><a href="/crews/<%= profile.crew.id %>"><%= profile.crew.name %></a><% } else { %><span class="muted">없음</span><% } %></dd>
+          <dt>책임자</dt><dd><%- include('partials/who', { u: profile.crew ? profile.crew.capo : null }) %></dd>
+          <dt>임시 소속</dt><dd><% if (profile.temporaryCrews.length) { %><% profile.temporaryCrews.forEach((c, i) => { %><%= i ? ', ' : '' %><a href="/crews/<%= c.id %>"><%= c.name %></a><% }) %><% } else { %><span class="muted">없음</span><% } %></dd>
+        </dl>
+      </section>
+    </div>
+  </div>
+<% } else if (summary) { %>
+  <p class="denied"><%= summary.message %></p>
 <% } %>
-
-<section class="card">
-  <h2>기능 요구사항 확인 (단계 1~6)</h2>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>단계</th><th>요구사항</th><th>기능</th><th>확인 방법</th><th>관련 API</th><th></th></tr></thead>
-      <tbody>
-        <% checks.forEach((c) => { %>
-          <tr>
-            <td><%= c.step %></td>
-            <td><span class="badge code"><%= c.id %></span></td>
-            <td><%= c.title %></td>
-            <td><%= c.how %></td>
-            <td class="mono small"><%= c.api %></td>
-            <td><a href="<%= c.link %>">열기</a></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<section class="card">
-  <h2>업무 규칙 확인 시나리오</h2>
-  <p class="section-note muted">시드 데이터 기준입니다. 데이터를 처음 상태로 되돌리려면 서버를 <code>node app.js --reset</code>으로 다시 시작하세요.</p>
-  <div class="scenarios">
-    <% scenarios.forEach((s) => { %>
-      <article class="scenario">
-        <h3><span class="badge code"><%= s.rule %></span> <%= s.title %></h3>
-        <ol><% s.steps.forEach((step) => { %><li><%= step %></li><% }) %></ol>
-      </article>
-    <% }) %>
-  </div>
-</section>
-
-<section class="card">
-  <h2>테스트 계정</h2>
-  <p class="section-note muted">정지·탈퇴 계정으로 로그인하면 거부되는 것도 확인할 수 있습니다.</p>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>아이디</th><th>이름</th><th>역할</th><th>상태</th><th></th></tr></thead>
-      <tbody>
-        <% accounts.forEach((a) => { %>
-          <tr>
-            <td class="mono"><%= a.username %></td>
-            <td><%= a.name %></td>
-            <td><%= C.ROLE_INFO[a.role].label %></td>
-            <td><span class="badge status-<%= a.status %>"><%= C.MEMBER_STATUS_INFO[a.status].label %></span></td>
-            <td>
-              <form method="post" action="/login">
-                <input type="hidden" name="username" value="<%= a.username %>">
-                <input type="hidden" name="password" value="<%= seedPassword %>">
-                <input type="hidden" name="next" value="/">
-                <button class="small">로그인</button>
-              </form>
-            </td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  </div>
-
-  <h3>시드 Crew</h3>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Crew</th><th>지역</th><th>책임자</th><th>담당 Underboss</th><th>소속원</th></tr></thead>
-      <tbody>
-        <% seedCrews.forEach((c) => { %>
-          <tr>
-            <td><%= c.name %></td>
-            <td><%= c.region %></td>
-            <td class="mono"><%= c.capo %></td>
-            <td class="mono"><%= c.underboss %></td>
-            <td class="mono small"><%= c.members.map(([u, t]) => (t === 'TEMPORARY' ? u + '(임시)' : u)).join(', ') %></td>
-          </tr>
-        <% }) %>
-      </tbody>
-    </table>
-  </div>
-</section>
 <%- include('partials/foot') %>

@@ -8,6 +8,7 @@ const auditService = require('../services/auditService');
 const { presentUser } = require('../services/presenters');
 const constants = require('../config/constants');
 const { parseCookies } = require('../utils/cookies');
+const { ICONS, navFor } = require('../controllers/webNav');
 
 const TOKEN_COOKIE = 'family_token';
 const FLASH_COOKIE = 'family_flash';
@@ -42,6 +43,13 @@ const dateFormat = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
 });
 const formatDate = (value) => (value ? dateFormat.format(new Date(value)) : '-');
+
+// 로그인 실패 사유 코드의 화면 표시
+const LOGIN_REASON_LABELS = {
+  WRONG_PASSWORD: '비밀번호 불일치', UNKNOWN_USERNAME: '없는 아이디', ACCOUNT_LOCKED: '잠긴 계정',
+  ACCOUNT_SUSPENDED: '정지된 계정', ACCOUNT_WITHDRAWN: '탈퇴한 계정', ACCOUNT_PENDING: '승인 대기 계정',
+};
+const loginReason = (code) => LOGIN_REASON_LABELS[code] ?? code ?? '-';
 
 // 화면의 날짜·시간 입력칸(datetime-local)은 한국 시간으로 보고, 입력칸 기본값도 한국 시간으로 채운다.
 const KST_OFFSET = 9 * 60 * 60 * 1000;
@@ -79,9 +87,13 @@ async function webContext(req, res, next) {
   res.locals.can = () => false;
   res.locals.C = constants;
   res.locals.fmt = formatDate;
+  res.locals.loginReason = loginReason;
   res.locals.toLocalInput = toLocalInput;
   res.locals.path = req.path;
   res.locals.pageUrl = (page) => `${req.path}?${new URLSearchParams({ ...req.query, page: String(page) })}`;
+  res.locals.icons = ICONS;
+  res.locals.nav = [];
+  res.locals.current = null;
 
   const token = cookies[TOKEN_COOKIE];
   if (token) {
@@ -91,6 +103,9 @@ async function webContext(req, res, next) {
       const keys = new Set((await permissionService.listFor(req.user.role)).map((p) => p.key));
       res.locals.me = presentUser(req.user);
       res.locals.can = (key) => keys.has(key);
+      const { groups, current } = navFor(req.path, res.locals.can);
+      res.locals.nav = groups;
+      res.locals.current = current;
     } catch {
       // 만료·종료된 세션이거나 사용할 수 없게 된 계정이면 로그아웃 상태로 둔다.
       req.user = undefined;

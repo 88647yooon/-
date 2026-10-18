@@ -1,6 +1,12 @@
 <%- include('partials/head') %>
-<h1>감사 기록 상세 <span class="tag">FR-20</span></h1>
-<p class="muted"><a href="/audit-logs">감사 기록 목록</a></p>
+<%- include('partials/crumbs', { trail: [{ label: '상세' }] }) %>
+<div class="page-head">
+  <div>
+    <h1><%= log.actionLabel %></h1>
+    <p class="page-desc"><%= fmt(log.at) %> · <%= log.actor ? log.actor.username : '시스템' %></p>
+  </div>
+  <div class="page-actions"><a class="button ghost" href="/audit-logs">목록으로</a></div>
+</div>
 
 <section class="card">
   <dl class="facts">

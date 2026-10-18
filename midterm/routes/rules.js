@@ -87,7 +87,7 @@ const fields = {
   optionalDatetime: { type: 'datetime' },
   headcount: { type: 'integer', min: 1, max: 100 },
   resourceCode: {
-    type: 'string', required: true, pattern: /^[A-Za-z0-9][A-Za-z0-9._-]{0,29}$/,
+    type: 'string', required: true, max: 30, pattern: /^[A-Za-z0-9][A-Za-z0-9._-]{0,29}$/,
     patternMessage: '영문자·숫자로 시작하고 영문자, 숫자, 마침표(.), 밑줄(_), 하이픈(-)으로 1~30자여야 합니다.',
   },
   resourceName: { type: 'string', required: true, min: 1, max: 100 },

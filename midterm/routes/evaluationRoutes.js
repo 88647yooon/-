@@ -32,13 +32,13 @@ const evaluationParams = { params: { evaluationId: fields.docId } };
  *             type: object
  *             required: [evaluateeId, scores]
  *             properties:
- *               evaluateeId: { type: integer, example: 10 }
+ *               evaluateeId: { type: integer, minimum: 1, example: 10 }
  *               scores:
  *                 type: object
  *                 description: '평가 항목 키별 점수 (모든 항목 필수, 1~5 정수). 항목은 GET /api/evaluation-criteria'
  *                 additionalProperties: { type: integer, minimum: 1, maximum: 5 }
  *                 example: { diligence: 5, performance: 4, teamwork: 4, discretion: 5 }
- *               comment: { type: string, maxLength: 1000, example: 보고서를 꼼꼼하게 정리했습니다. }
+ *               comment: { type: string, nullable: true, maxLength: 1000, example: 보고서를 꼼꼼하게 정리했습니다. }
  *     responses:
  *       201: { $ref: '#/components/responses/EvaluationOne' }
  *       400: { $ref: '#/components/responses/BadRequest' }

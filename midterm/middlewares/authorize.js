@@ -6,13 +6,16 @@ const { unauthenticated, forbidden } = require('../utils/errors');
 function requirePermission(key) {
   permissionService.assertKnown(key); // 오타는 서버 시작 시점에 바로 드러나게 한다.
 
-  return async (req, res, next) => {
+  const middleware = async (req, res, next) => {
     if (!req.user) throw unauthenticated();
     if (!(await permissionService.has(req.user.role, key))) {
       throw forbidden('이 작업을 수행할 권한이 없습니다.', { permission: key, role: req.user.role });
     }
     next();
   };
+  // 통합 점검(tests/integration.test.js)이 라우트마다 권한 검사가 붙었는지 확인할 수 있게 키를 붙여 둔다.
+  middleware.permission = key;
+  return middleware;
 }
 
 module.exports = { requirePermission };

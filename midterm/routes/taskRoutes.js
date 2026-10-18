@@ -30,10 +30,10 @@ const taskParams = { params: { taskId: fields.id } };
  *             type: object
  *             required: [title, startAt, endAt]
  *             properties:
- *               title: { type: string, maxLength: 100, example: 강북 야간 순찰 }
+ *               title: { type: string, minLength: 1, maxLength: 100, example: 강북 야간 순찰 }
  *               description: { type: string, nullable: true, maxLength: 2000 }
- *               typeId: { type: integer, example: 1 }
- *               crewId: { type: integer, example: 1, description: '담당 Crew (Capo는 생략 가능)' }
+ *               typeId: { type: integer, minimum: 1, example: 1 }
+ *               crewId: { type: integer, minimum: 1, example: 1, description: '담당 Crew (Capo는 생략 가능)' }
  *               priority: { allOf: [{ $ref: '#/components/schemas/TaskPriority' }], default: MEDIUM }
  *               location: { type: string, nullable: true, maxLength: 100, example: 강북 일대 }
  *               startAt: { type: string, format: date-time, example: '2026-10-25T20:00:00+09:00' }
@@ -129,9 +129,9 @@ router.get(
  *             type: object
  *             minProperties: 1
  *             properties:
- *               title: { type: string, maxLength: 100 }
+ *               title: { type: string, minLength: 1, maxLength: 100 }
  *               description: { type: string, nullable: true, maxLength: 2000 }
- *               typeId: { type: integer }
+ *               typeId: { type: integer, minimum: 1, example: 1 }
  *               priority: { $ref: '#/components/schemas/TaskPriority' }
  *               location: { type: string, nullable: true, maxLength: 100 }
  *     responses:
@@ -269,7 +269,7 @@ router.patch(
  *             properties:
  *               startAt: { type: string, format: date-time }
  *               endAt: { type: string, format: date-time }
- *               title: { type: string, maxLength: 100, description: 생략하면 원본 제목 }
+ *               title: { type: string, minLength: 1, maxLength: 100, description: 생략하면 원본 제목 }
  *     responses:
  *       201: { $ref: '#/components/responses/TaskOne' }
  *       400: { $ref: '#/components/responses/BadRequest' }
@@ -309,11 +309,12 @@ router.post(
  *               resources:
  *                 type: array
  *                 maxItems: 20
+ *                 default: []
  *                 items:
  *                   type: object
  *                   required: [categoryId, quantity]
  *                   properties:
- *                     categoryId: { type: integer, example: 1 }
+ *                     categoryId: { type: integer, minimum: 1, example: 1 }
  *                     quantity: { type: integer, minimum: 1, maximum: 20, example: 1 }
  *     responses:
  *       200: { $ref: '#/components/responses/TaskRequirementsOne' }
@@ -430,11 +431,12 @@ router.post('/:taskId/cancel', requirePermission('task.manage'), validate({ ...t
  *               summary: { type: string, maxLength: 2000, example: 예정 경로 순찰 완료. 특이사항 없음. }
  *               participations:
  *                 type: array
+ *                 maxItems: 100
  *                 items:
  *                   type: object
  *                   required: [userId, participated]
  *                   properties:
- *                     userId: { type: integer }
+ *                     userId: { type: integer, minimum: 1, example: 8 }
  *                     participated: { type: boolean }
  *                     contribution: { type: string, maxLength: 1000 }
  *     responses:

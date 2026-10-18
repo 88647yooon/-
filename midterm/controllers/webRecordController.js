@@ -1,4 +1,4 @@
-// 평가·평판·이력·감사 기록 웹 화면 (CR-02). 단계 5의 기능 요구사항(FR-18~FR-20, BR-10)을 브라우저에서 확인할 수 있게 한다.
+// 평가·평판·이력·감사 기록 웹 화면 (CR-02, FR-18~FR-20, BR-10).
 // REST API와 같은 서비스 계층을 호출하므로 평가 규칙과 조회 범위가 API와 똑같이 적용된다.
 const evaluationService = require('../services/evaluationService');
 const reputationService = require('../services/reputationService');
@@ -76,7 +76,7 @@ async function evaluationsPage(req, res) {
 
 async function evaluationPage(req, res) {
   const evaluation = await evaluationService.get(req.user, eid(req));
-  res.render('evaluation', { title: '평가 상세', evaluation });
+  res.render('evaluation', { title: `${evaluation.evaluatee.name} 평가`, evaluation });
 }
 
 async function auditLogsPage(req, res) {

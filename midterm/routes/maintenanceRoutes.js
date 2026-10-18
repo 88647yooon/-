@@ -83,7 +83,7 @@ router.get('/resources/:resourceId/maintenances', requirePermission('resource.mo
  *             type: object
  *             minProperties: 1
  *             properties:
- *               reason: { type: string, maxLength: 500 }
+ *               reason: { type: string, minLength: 1, maxLength: 500 }
  *               expectedEndAt: { type: string, format: date-time, nullable: true }
  *     responses:
  *       200: { $ref: '#/components/responses/MaintenanceOne' }

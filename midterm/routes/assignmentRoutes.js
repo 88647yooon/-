@@ -41,7 +41,7 @@ const assigneeParams = { params: { taskId: fields.id, userId: fields.id } };
  *                   type: object
  *                   required: [userId]
  *                   properties:
- *                     userId: { type: integer }
+ *                     userId: { type: integer, minimum: 1 }
  *                     role: { allOf: [{ $ref: '#/components/schemas/AssigneeRole' }], default: MEMBER }
  *             example:
  *               assignees:
@@ -155,7 +155,7 @@ router.delete('/:taskId/assignees/:userId', requirePermission('task.manage'), va
  *             type: object
  *             required: [newUserId]
  *             properties:
- *               newUserId: { type: integer, example: 12 }
+ *               newUserId: { type: integer, minimum: 1, example: 12 }
  *               reason: { type: string, maxLength: 500 }
  *     responses:
  *       200: { $ref: '#/components/responses/AssigneeList' }
@@ -284,7 +284,7 @@ router.get('/:taskId/assignment-history', requirePermission('task.manage'), vali
  *             type: object
  *             required: [toUserId]
  *             properties:
- *               toUserId: { type: integer, example: 12 }
+ *               toUserId: { type: integer, minimum: 1, example: 12 }
  *               reason: { type: string, maxLength: 500, example: 개인 사정으로 참여가 어렵습니다. }
  *     responses:
  *       201: { $ref: '#/components/responses/SwapOne' }

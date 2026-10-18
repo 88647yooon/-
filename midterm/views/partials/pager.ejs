@@ -1,7 +1,10 @@
 <% if (meta) { %>
   <div class="pager">
-    <% if (meta.page > 1) { %><a href="<%= pageUrl(meta.page - 1) %>">‹ 이전</a><% } %>
-    <span><%= meta.page %> / <%= meta.totalPages %> 페이지 · 총 <%= meta.total %>건</span>
-    <% if (meta.page < meta.totalPages) { %><a href="<%= pageUrl(meta.page + 1) %>">다음 ›</a><% } %>
+    <span class="pager-total">총 <strong><%= meta.total %></strong>건</span>
+    <span class="pager-nav">
+      <% if (meta.page > 1) { %><a href="<%= pageUrl(meta.page - 1) %>">‹ 이전</a><% } else { %><span class="off">‹ 이전</span><% } %>
+      <span><%= meta.page %> / <%= Math.max(meta.totalPages, 1) %></span>
+      <% if (meta.page < meta.totalPages) { %><a href="<%= pageUrl(meta.page + 1) %>">다음 ›</a><% } else { %><span class="off">다음 ›</span><% } %>
+    </span>
   </div>
 <% } %>

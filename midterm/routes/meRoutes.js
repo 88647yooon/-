@@ -38,9 +38,9 @@ router.use(authenticate);
  *             type: object
  *             minProperties: 1
  *             properties:
- *               nickname: { type: string, nullable: true, maxLength: 50, example: 'The Hand' }
- *               phone: { type: string, nullable: true, example: '010-1234-5678' }
- *               email: { type: string, nullable: true, format: email, example: 'me@family.local' }
+ *               nickname: { type: string, minLength: 1, nullable: true, maxLength: 50, example: 'The Hand' }
+ *               phone: { type: string, pattern: '^[0-9+\-\s]{7,20}$', nullable: true, example: '010-1234-5678' }
+ *               email: { type: string, maxLength: 100, nullable: true, format: email, example: 'me@family.local' }
  *     responses:
  *       200: { $ref: '#/components/responses/MeOne' }
  *       400: { $ref: '#/components/responses/BadRequest' }
@@ -79,8 +79,8 @@ router.patch(
  *             type: object
  *             required: [currentPassword, newPassword]
  *             properties:
- *               currentPassword: { type: string, example: 'Family2026!' }
- *               newPassword: { type: string, minLength: 8, maxLength: 72, example: 'NewPass2026' }
+ *               currentPassword: { type: string, maxLength: 72, example: 'Family2026!' }
+ *               newPassword: { type: string, pattern: '^(?=.*[A-Za-z])(?=.*\d)', minLength: 8, maxLength: 72, example: 'NewPass2026' }
  *     responses:
  *       200:
  *         description: 변경 성공

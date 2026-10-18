@@ -1,7 +1,5 @@
-// 웹 화면 (CR-02, EJS 서버 사이드 렌더링). 단계 1·2의 기능 요구사항을 브라우저에서 확인할 수 있게 한다.
+// 웹 화면 (CR-02, EJS 서버 사이드 렌더링): 업무 홈, 로그인, 내 정보, 구성원, Crew, 역할 변경 요청.
 // 화면은 REST API와 같은 서비스 계층을 호출하므로, 권한 검사(NFR-03)와 업무 규칙(BR-01·BR-04·BR-05)이 API와 똑같이 적용된다.
-const config = require('../config');
-const seedData = require('../models/seedData');
 const userModel = require('../models/sql/userModel');
 const membershipModel = require('../models/sql/membershipModel');
 const authService = require('../services/authService');
@@ -11,32 +9,54 @@ const crewService = require('../services/crewService');
 const membershipService = require('../services/membershipService');
 const joinRequestService = require('../services/joinRequestService');
 const roleRequestService = require('../services/roleRequestService');
+const resourceRequestService = require('../services/resourceRequestService');
+const statsService = require('../services/statsService');
+const adminService = require('../services/adminService');
 const { setLoginCookie, clearLoginCookie, setFlash, safeNext } = require('../middlewares/web');
-const { CHECKS, SCENARIOS } = require('./webGuide');
 const webRecord = require('./webRecordController');
 const webOps = require('./webOpsController');
 const { optional, denied, userIdOf, action, nothingChanged } = require('./webHelpers');
 const { contextOf } = require('../utils/context');
 
 // ---------------------------------------------------------------------------
-// 홈·로그인
+// 업무 홈·로그인
 
+// 내가 승인·처리해야 하는 요청 수 (권한이 있는 것만)
+async function pendingApprovals(user, can) {
+  const [roleRequests, resourceRequests] = await Promise.all([
+    can('roleRequest.review') ? roleRequestService.list(user, { status: 'PENDING', page: 1, size: 1 }) : null,
+    can('resource.request.review') ? resourceRequestService.list(user, { box: 'review', status: 'PENDING', page: 1, size: 1 }) : null,
+  ]);
+  return { roleRequests: roleRequests?.meta.total ?? null, resourceRequests: resourceRequests?.meta.total ?? null };
+}
+
+// 로그인한 구성원의 첫 화면: 내 업무·일정·자원·처리할 일, 관리자는 시스템 상태, 운영 관리자는 운영 경고
 async function home(req, res) {
-  res.render('home', {
-    title: '홈',
-    profile: req.user ? await meService.getMe(req.user) : null,
-    checks: CHECKS,
-    scenarios: SCENARIOS,
-    accounts: seedData.users,
-    seedCrews: seedData.crews,
-    seedPassword: config.seedPassword,
+  if (!req.user) return res.redirect('/login');
+  const { can } = res.locals;
+  const admin = req.user.role === 'ADMIN';
+  const [profile, summary, approvals, alerts, system] = await Promise.all([
+    meService.getMe(req.user),
+    admin ? null : webOps.myDashboard(req.user),
+    pendingApprovals(req.user, can),
+    can('stats.read') ? statsService.alerts() : null,
+    admin ? Promise.all([
+      adminService.health(),
+      adminService.integrityCheck(),
+      adminService.accounts(req.user, { locked: true, page: 1, size: 1 }),
+      adminService.loginHistory(req.user, { success: false, page: 1, size: 6 }),
+    ]) : null,
+  ]);
+  return res.render('home', {
+    title: '업무 홈', profile, summary, approvals, alerts, now: new Date(),
+    system: system && { health: system[0], integrity: system[1], lockedCount: system[2].meta.total, failedLogins: system[3].data },
   });
 }
 
 function loginPage(req, res) {
   const next = safeNext(req.query.next);
   if (req.user) return res.redirect(next);
-  return res.render('login', { title: '로그인', next, accounts: seedData.users, seedPassword: config.seedPassword });
+  return res.render('login', { title: '로그인', next });
 }
 
 async function login(req, res) {
@@ -60,14 +80,13 @@ async function logout(req, res) {
 // 내 정보
 
 async function mePage(req, res) {
-  const [profile, permissions, sessions, joinRequests, summary] = await Promise.all([
+  const [profile, permissions, sessions, joinRequests] = await Promise.all([
     meService.getMe(req.user),
     meService.getPermissions(req.user),
     authService.listSessions(req.user, req.sessionId),
     joinRequestService.listMine(req.user, { page: 1, size: 20 }),
-    webOps.myDashboard(req.user),
   ]);
-  res.render('me', { title: '내 정보', profile, permissions, sessions, joinRequests: joinRequests.data, summary });
+  res.render('me', { title: '내 정보', profile, permissions, sessions, joinRequests: joinRequests.data });
 }
 
 const updateProfile = action(async (req) => {

@@ -75,7 +75,7 @@ router.post(
  *             type: object
  *             required: [refreshToken]
  *             properties:
- *               refreshToken: { type: string, description: 로그인 또는 이전 재발급 응답의 refreshToken }
+ *               refreshToken: { type: string, maxLength: 200, description: 로그인 또는 이전 재발급 응답의 refreshToken }
  *     responses:
  *       200:
  *         description: 재발급 성공

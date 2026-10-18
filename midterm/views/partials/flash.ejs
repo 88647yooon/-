@@ -1,8 +1,7 @@
 <% if (flash) { %>
-  <div class="flash <%= flash.type %>" role="status">
-    <% if (flash.type === 'error' && flash.code) { %><span class="badge code"><%= flash.code %></span><% } %>
-    <% if (flash.rule) { %><span class="badge code"><%= flash.rule %></span><% } %>
-    <%= flash.message %>
+  <% const ruleCode = flash.rule || (/^BR-\d+$/.test(flash.code || '') ? flash.code : null); %>
+  <div class="flash <%= flash.type %>" role="<%= flash.type === 'error' ? 'alert' : 'status' %>">
+    <p><%= flash.message %><% if (ruleCode) { %> <span class="flash-code">규정 <%= ruleCode %></span><% } %></p>
     <% if (flash.details && flash.details.length) { %>
       <ul>
         <% flash.details.forEach((d) => { %>

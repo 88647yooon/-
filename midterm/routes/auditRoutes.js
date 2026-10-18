@@ -25,9 +25,9 @@ const logQuery = {
  *       기본은 최근 순이다. 변경 전후 값은 상세에서 본다. Boss와 Administrator만 볼 수 있다.
  *     parameters:
  *       - { name: actorId, in: query, schema: { type: integer, minimum: 1 } }
- *       - { name: action, in: query, description: '행위 코드 (예: USER_ROLE_CHANGED)', schema: { type: string } }
- *       - { name: targetEntity, in: query, description: '대상 유형 (user, crew, task, resource, evaluation, reputationEvent 등)', schema: { type: string } }
- *       - { name: targetId, in: query, schema: { type: string } }
+ *       - { name: action, in: query, description: '행위 코드 (예: USER_ROLE_CHANGED)', schema: { $ref: '#/components/schemas/ActionCode' } }
+ *       - { name: targetEntity, in: query, description: '대상 유형 (user, crew, task, resource, evaluation, reputationEvent 등)', schema: { type: string, maxLength: 30 } }
+ *       - { name: targetId, in: query, schema: { type: string, maxLength: 30 } }
  *       - $ref: '#/components/parameters/From'
  *       - $ref: '#/components/parameters/To'
  *       - { name: q, in: query, schema: { type: string, maxLength: 50 } }
@@ -53,9 +53,9 @@ router.get('/audit-logs', requirePermission('audit.read'), validate({ query: { .
  *       X-Total-Count 헤더에 담긴 건수가 있다. Administrator만 쓸 수 있다.
  *     parameters:
  *       - { name: actorId, in: query, schema: { type: integer, minimum: 1 } }
- *       - { name: action, in: query, schema: { type: string } }
- *       - { name: targetEntity, in: query, schema: { type: string } }
- *       - { name: targetId, in: query, schema: { type: string } }
+ *       - { name: action, in: query, schema: { $ref: '#/components/schemas/ActionCode' } }
+ *       - { name: targetEntity, in: query, schema: { type: string, maxLength: 30 } }
+ *       - { name: targetId, in: query, schema: { type: string, maxLength: 30 } }
  *       - $ref: '#/components/parameters/From'
  *       - $ref: '#/components/parameters/To'
  *       - { name: q, in: query, schema: { type: string, maxLength: 50 } }

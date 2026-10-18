@@ -105,7 +105,7 @@ const checkSource = (source, input, rules, errors, { strict }) =>
 const idParam = { type: 'integer', required: true, min: 1 };
 
 function validate(schema) {
-  return (req, res, next) => {
+  const middleware = (req, res, next) => {
     const errors = [];
     const valid = {};
 
@@ -128,6 +128,9 @@ function validate(schema) {
     req.valid = valid;
     next();
   };
+  // 통합 점검(tests/integration.test.js)이 라우트의 검증 규칙과 Swagger 문서를 대조할 수 있게 규칙을 붙여 둔다.
+  middleware.schema = schema;
+  return middleware;
 }
 
-module.exports = { validate, idParam };
+module.exports = { validate, idParam, FORMATS };

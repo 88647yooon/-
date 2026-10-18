@@ -1,9 +1,21 @@
 <%- include('partials/head') %>
-<h1><%= user.name %> <span class="muted small">@<%= user.username %></span></h1>
+<% const manage = can('user.update') || can('user.role.change') || can('user.status.change') || can('roleRequest.create') || can('user.delete'); %>
+<%- include('partials/crumbs', { trail: [{ label: user.name }] }) %>
+<div class="page-head">
+  <div>
+    <h1><%= user.name %> <span class="badge role"><%= user.roleLabel %></span> <span class="badge status-<%= user.status %>"><%= user.statusLabel %></span></h1>
+    <p class="page-desc">@<%= user.username %><%= user.currentMemberships.length ? ' · ' + user.currentMemberships.map((m) => m.crew.name + (m.type === 'TEMPORARY' ? '(임시)' : '')).join(', ') : '' %></p>
+  </div>
+  <% if (manage && me.id !== user.id) { %><div class="page-actions"><a class="button" href="#manage">구성원 관리</a></div><% } %>
+</div>
+<nav class="subnav">
+  <a href="#overview">개요</a><a href="#memberships">소속 이력</a><a href="#reputation">평판·평가</a><a href="#changes">변경 이력</a><a href="#activity">활동</a>
+  <% if (manage && me.id !== user.id) { %><a href="#manage">관리</a><% } %>
+</nav>
 
-<div class="cols">
+<div class="cols" id="overview">
   <section class="card">
-    <h2>기본 정보 <span class="tag">FR-01</span></h2>
+    <h2>기본 정보</h2>
     <dl class="facts">
       <dt>역할</dt><dd><span class="badge role"><%= user.roleLabel %></span></dd>
       <dt>상태</dt><dd><span class="badge status-<%= user.status %>"><%= user.statusLabel %></span></dd>
@@ -17,11 +29,11 @@
         <dt>등록일</dt><dd><%= fmt(user.createdAt) %></dd>
       <% } %>
     </dl>
-    <p class="hint">공개 범위: <%= { basic: '기본 (연락처·계정 정보 비공개)', contact: '연락처 포함', full: '전체' }[user.visibility] %></p>
+    <% if (user.visibility === 'basic') { %><p class="hint">연락처와 계정 정보는 공개되지 않습니다.</p><% } %>
   </section>
 
   <section class="card">
-    <h2>현재 소속 <span class="tag">FR-02 · FR-05</span></h2>
+    <h2>현재 소속</h2>
     <% if (user.currentMemberships.length) { %>
       <ul>
         <% user.currentMemberships.forEach((m) => { %>
@@ -40,7 +52,7 @@
 
 <div class="cols">
   <section class="card">
-    <h2>상위 지휘 계통 <span class="tag">FR-05</span></h2>
+    <h2>상위 지휘 계통</h2>
     <% if (chain.ok) { %>
       <% if (chain.value.chain.length) { %>
         <ol>
@@ -51,7 +63,7 @@
   </section>
 
   <section class="card">
-    <h2>지휘 하위 구성원 <span class="tag">FR-05</span></h2>
+    <h2>지휘 하위 구성원</h2>
     <% if (subordinates.ok) { %>
       <% if (subordinates.value.data.length) { %>
         <table>
@@ -73,8 +85,8 @@
   </section>
 </div>
 
-<section class="card">
-  <h2>소속 이력 <span class="tag">FR-19 · BR-10</span></h2>
+<section class="card" id="memberships">
+  <h2>소속 이력</h2>
   <% if (memberships.ok) { %>
     <% if (memberships.value.data.length) { %>
       <div class="table-wrap">
@@ -99,9 +111,9 @@
   <% } else { %><p class="denied"><%= memberships.message %></p><% } %>
 </section>
 
-<div class="cols">
+<div class="cols" id="reputation">
   <section class="card">
-    <h2>평판 <span class="tag">FR-18 · FR-19</span></h2>
+    <h2>평판</h2>
     <% if (reputation.ok) { const r = reputation.value; %>
       <p><span class="big"><%= r.reputationScore %></span> / 100
         <span class="muted small">· 유효 평가 <%= r.evaluations.count %>건, 평균 <%= r.evaluations.averageScore ?? '-' %>점 · 공로·징계 <%= r.events.points > 0 ? '+' : '' %><%= r.events.points %>점</span></p>
@@ -114,10 +126,10 @@
       <p class="hint"><%= r.formula %></p>
     <% } else { %><p class="denied"><%= reputation.message %></p><% } %>
 
-    <h3>공로·징계 <span class="tag">FR-18 · BR-10</span></h3>
+    <h3>공로·징계</h3>
     <% if (events.ok) { %>
       <% if (events.value.data.length) { %>
-        <ul>
+        <ul class="feed">
           <% events.value.data.forEach((ev) => { %>
             <li class="<%= ev.active ? '' : 'muted' %>"><span class="badge <%= ev.points > 0 ? 'ok' : 'bad' %>"><%= ev.kindLabel %> <%= ev.points > 0 ? '+' : '' %><%= ev.points %></span>
               <%= ev.title %> <span class="small muted">— <%= ev.recordedBy ? ev.recordedBy.name : '' %>, <%= fmt(ev.createdAt) %></span>
@@ -138,12 +150,12 @@
         <input name="description" maxlength="500" placeholder="내용">
         <button class="small">기록</button>
       </form>
-      <p class="hint">자신과 같거나 높은 역할의 구성원에게는 기록할 수 없습니다(BR-04).</p>
+      <p class="hint">공로는 점수를 더하고 징계는 점수를 뺍니다. 자신과 같거나 높은 역할의 구성원에게는 기록할 수 없습니다.</p>
     <% } %>
   </section>
 
   <section class="card" id="evaluations">
-    <h2>받은 평가 <span class="tag">FR-19</span></h2>
+    <h2>받은 평가</h2>
     <% if (evaluations.ok) { %>
       <% if (evaluations.value.data.length) { %>
         <table>
@@ -165,8 +177,8 @@
   </section>
 </div>
 
-<section class="card">
-  <h2>변경 이력 (시간순) <span class="tag">FR-19 · BR-10</span></h2>
+<section class="card" id="changes">
+  <h2>변경 이력</h2>
   <% if (changes.ok) { %>
     <% if (changes.value.data.length) { %>
       <div class="table-wrap">
@@ -180,31 +192,30 @@
           </tbody>
         </table>
       </div>
-      <p class="hint">역할·상태·소속·평가(공로·징계 포함)가 바뀔 때마다 MongoDB 활동 기록에 남은 내용입니다.</p>
+      <p class="hint">역할·상태·소속·평가·공로·징계가 바뀐 기록을 시간순으로 보여 줍니다.</p>
     <% } else { %><p class="muted">변경 이력이 없습니다.</p><% } %>
   <% } else { %><p class="denied"><%= changes.message %></p><% } %>
 </section>
 
-<section class="card">
-  <h2>활동 <span class="tag">FR-19</span></h2>
+<section class="card" id="activity">
+  <h2>활동</h2>
   <% if (activity.ok) { %>
     <% if (activity.value.data.length) { %>
-      <ul>
+      <ul class="feed">
         <% activity.value.data.forEach((i) => { %>
-          <li><span class="small muted"><%= fmt(i.at) %></span> <span class="badge"><%= i.typeLabel %></span>
+          <li><span class="time"><%= fmt(i.at) %></span> <span class="badge"><%= i.typeLabel %></span>
             <% if (i.evaluationId) { %><a href="/evaluations/<%= i.evaluationId %>"><%= i.summary %></a><% } else if (i.task && i.kind === 'TASK') { %><a href="/tasks/<%= i.task.id %>"><%= i.summary %></a><% } else { %><%= i.summary %><% } %></li>
         <% }) %>
       </ul>
-      <p class="hint">업무 배정·참여와 자원 사용은 SQL에서, 받은 평가와 공로·징계는 MongoDB에서 모은 최근 30건입니다.</p>
+      <p class="hint">업무 배정·참여, 자원 사용, 받은 평가, 공로·징계의 최근 30건입니다.</p>
     <% } else { %><p class="muted">활동 기록이 없습니다.</p><% } %>
   <% } else { %><p class="denied"><%= activity.message %></p><% } %>
 </section>
 
-<% const manage = can('user.update') || can('user.role.change') || can('user.status.change') || can('roleRequest.create') || can('user.delete'); %>
 <% if (manage && me.id !== user.id) { %>
-  <section class="card">
-    <h2>관리 <span class="tag">FR-01 · FR-03 · FR-04</span></h2>
-    <p class="section-note muted">권한 검사는 서버가 다시 합니다. 자신과 같거나 높은 역할의 구성원은 바꿀 수 없고(BR-04), Capo는 자기 Crew 소속원만 관리합니다(BR-05).</p>
+  <section class="card" id="manage">
+    <h2>구성원 관리</h2>
+    <p class="section-note muted">자신과 같거나 높은 역할의 구성원은 변경할 수 없고, Capo는 자기 Crew 소속원만 관리할 수 있습니다.</p>
     <div class="forms">
       <% if (can('user.update')) { %>
         <form method="post" action="/users/<%= user.id %>/basic">

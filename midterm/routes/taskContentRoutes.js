@@ -34,8 +34,8 @@ const itemContent = { type: 'string', required: true, min: 1, max: 300 };
  *             type: object
  *             required: [content]
  *             properties:
- *               content: { type: string, maxLength: 2000, example: 출발 30분 전에 집합합니다. }
- *               targetUserId: { type: integer, description: 생략하면 참여자 전체 }
+ *               content: { type: string, minLength: 1, maxLength: 2000, example: 출발 30분 전에 집합합니다. }
+ *               targetUserId: { type: integer, minimum: 1, example: 8, description: 생략하면 참여자 전체 }
  *     responses:
  *       201: { $ref: '#/components/responses/NoteOne' }
  *       400: { $ref: '#/components/responses/BadRequest' }
@@ -84,7 +84,7 @@ router.get('/:taskId/notes', requirePermission('task.read'), validate(taskParams
  *             type: object
  *             required: [content]
  *             properties:
- *               content: { type: string, maxLength: 2000 }
+ *               content: { type: string, minLength: 1, maxLength: 2000 }
  *     responses:
  *       200: { $ref: '#/components/responses/NoteOne' }
  *       400: { $ref: '#/components/responses/BadRequest' }
@@ -127,7 +127,7 @@ router.delete('/:taskId/notes/:noteId', requirePermission('task.manage'), valida
  *             type: object
  *             required: [content]
  *             properties:
- *               content: { type: string, maxLength: 300, example: 무전기 지급 }
+ *               content: { type: string, minLength: 1, maxLength: 300, example: 무전기 지급 }
  *     responses:
  *       201: { $ref: '#/components/responses/ChecklistItemOne' }
  *       400: { $ref: '#/components/responses/BadRequest' }
@@ -171,8 +171,8 @@ router.get('/:taskId/checklist', requirePermission('task.read'), validate(taskPa
  *             type: object
  *             minProperties: 1
  *             properties:
- *               content: { type: string, maxLength: 300 }
- *               position: { type: integer, minimum: 1 }
+ *               content: { type: string, minLength: 1, maxLength: 300 }
+ *               position: { type: integer, example: 1, minimum: 1 }
  *     responses:
  *       200: { $ref: '#/components/responses/ChecklistItemOne' }
  *       400: { $ref: '#/components/responses/BadRequest' }
@@ -258,7 +258,7 @@ router.post(
  *             type: object
  *             required: [dependsOnId]
  *             properties:
- *               dependsOnId: { type: integer, example: 2 }
+ *               dependsOnId: { type: integer, minimum: 1, example: 2 }
  *     responses:
  *       201: { $ref: '#/components/responses/DependenciesOne' }
  *       400: { $ref: '#/components/responses/BadRequest' }

@@ -1,8 +1,14 @@
 <%- include('partials/head') %>
-<h1>감사 기록 <span class="tag">FR-20 · BR-09 · BR-10</span></h1>
+<%- include('partials/crumbs') %>
+<div class="page-head">
+  <div>
+    <h1>감사 기록</h1>
+    <p class="page-desc">상태 변경과 관리 활동을 누가, 언제, 무엇을 바꿨는지 추적합니다.</p>
+  </div>
+</div>
 
 <section class="card">
-  <form method="get" action="/audit-logs" class="form-row">
+  <form method="get" action="/audit-logs" class="form-row filters">
     <label>행위
       <select name="action">
         <option value="">전체</option>
@@ -44,12 +50,12 @@
     </table>
   </div>
   <%- include('partials/pager', { meta }) %>
-  <p class="hint">단계 1부터 모든 상태 변경과 관리 활동이 MongoDB에 쌓인 기록입니다. 시각을 누르면 변경 전후 값을 봅니다.</p>
+  <p class="hint">시각을 누르면 변경 전후 값을 볼 수 있습니다.</p>
 </section>
 
 <% if (security) { %>
-  <section class="card">
-    <h2>권한 거부 기록 <span class="tag">BR-09 · NFR-03</span></h2>
+  <section class="card" id="security">
+    <h2>권한 거부 기록</h2>
     <div class="table-wrap">
       <table>
         <thead><tr><th>시각</th><th>사용자</th><th>요청</th><th>이유</th></tr></thead>
@@ -58,7 +64,7 @@
             <tr><td class="small"><%= fmt(e.at) %></td><td class="small"><%= e.user ? `${e.user.username} (${e.user.role})` : '-' %></td>
               <td class="mono small"><%= e.method %> <%= e.path %></td><td class="small"><%= e.reason || '' %></td></tr>
           <% }) %>
-          <% if (!security.length) { %><tr><td colspan="4" class="muted">권한 거부 기록이 없습니다.</td></tr><% } %>
+          <% if (!security.length) { %><tr><td colspan="4" class="empty">권한 거부 기록이 없습니다.</td></tr><% } %>
         </tbody>
       </table>
     </div>

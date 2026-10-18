@@ -1,10 +1,18 @@
 <%- include('partials/head') %>
-<h1>관리자 <span class="tag">FR-23 · NFR-03 · BR-09</span></h1>
-<p class="muted">Administrator만 들어올 수 있습니다. 다른 계정이 주소로 직접 들어오면 403 화면이 나오고 권한 거부 기록이 남습니다.</p>
+<%- include('partials/crumbs') %>
+<div class="page-head">
+  <div>
+    <h1>시스템 관리</h1>
+    <p class="page-desc">계정 보안, 역할별 권한, 운영 설정과 시스템 상태를 관리합니다.</p>
+  </div>
+</div>
+<nav class="subnav">
+  <a href="#status">시스템 상태</a><a href="#accounts">계정 보안</a><a href="#history">로그인 이력</a><a href="#permissions">역할별 권한</a><a href="#settings">운영 설정</a>
+</nav>
 
-<div class="cols">
+<div class="cols" id="status">
   <section class="card">
-    <h2>DB 연결 상태 <span class="tag">NFR-02 · #210</span></h2>
+    <h2>DB 연결 상태</h2>
     <p><span class="badge <%= health.status === 'ok' ? 'ok' : 'bad' %>"><%= health.status === 'ok' ? '✓ 정상' : '✕ 문제 있음' %></span></p>
     <dl class="facts">
       <dt>MySQL</dt><dd><%= health.mysql.ok ? `연결됨 · ${health.mysql.latencyMs}ms` : `오류: ${health.mysql.error}` %> <span class="mono small muted"><%= health.mysql.database %></span></dd>
@@ -13,22 +21,22 @@
     </dl>
   </section>
   <section class="card">
-    <h2>데이터 무결성 점검 <span class="tag">DR-01 · #209</span></h2>
+    <h2>데이터 무결성 점검</h2>
     <p><span class="badge <%= integrity.ok ? 'ok' : 'bad' %>"><%= integrity.ok ? '✓ 모든 규칙 정상' : '✕ 규칙이 깨진 데이터 있음' %></span> <span class="muted small"><%= fmt(integrity.checkedAt) %></span></p>
     <ul class="small">
       <% integrity.checks.forEach((c) => { %>
-        <li><span class="badge code"><%= c.rule %></span> <%= c.label %>: <strong><%= c.count %>건</strong>
+        <li><span class="flash-code"><%= c.rule %></span> <%= c.label %>: <strong><%= c.count %>건</strong>
           <% if (c.count) { %><br><span class="mono muted"><%= JSON.stringify(c.items.slice(0, 3)) %></span><% } %></li>
       <% }) %>
     </ul>
   </section>
 </div>
 
-<section class="card">
-  <h2>계정 보안 현황 <span class="tag">FR-23 · #199~#203</span></h2>
-  <form method="get" action="/admin" class="form-row">
+<section class="card" id="accounts">
+  <h2>계정 보안 현황</h2>
+  <form method="get" action="/admin#accounts" class="form-row filters">
     <input name="q" value="<%= query.q || '' %>" placeholder="이름·아이디">
-    <label class="small"><input type="checkbox" name="locked" value="true" <%= query.locked ? 'checked' : '' %>> 잠긴 계정만</label>
+    <label class="check"><input type="checkbox" name="locked" value="true" <%= query.locked ? 'checked' : '' %>> 잠긴 계정만</label>
     <label>정렬
       <select name="sort"><% [['username', '아이디순'], ['-lastLoginAt', '최근 로그인순'], ['-failedLoginCount', '로그인 실패 많은 순']].forEach(([v, l]) => { %><option value="<%= v %>" <%= query.sort === v ? 'selected' : '' %>><%= l %></option><% }) %></select>
     </label>
@@ -66,23 +74,23 @@
   <p class="hint">잠그면 로그인이 막히고 모든 세션이 끊깁니다. 연속 로그인 실패가 잠금 기준(운영 설정)에 이르면 자동으로 잠깁니다. 임시 비밀번호는 다음 화면에 한 번만 보입니다.</p>
 </section>
 
-<section class="card">
-  <h2>최근 로그인 이력 <span class="tag">#204</span></h2>
+<section class="card" id="history">
+  <h2>최근 로그인 이력</h2>
   <p><a class="small" href="/admin?loginFailed=true#history">실패만 보기</a> · <a class="small" href="/admin#history">전체</a></p>
-  <table id="history">
+  <table>
     <thead><tr><th>시각</th><th>아이디</th><th>결과</th><th>이유</th><th>IP</th></tr></thead>
     <tbody>
       <% history.forEach((h) => { %>
         <tr><td class="small"><%= fmt(h.at) %></td><td class="mono small"><%= h.username %></td>
           <td><span class="badge <%= h.success ? 'ok' : 'bad' %>"><%= h.success ? '✓ 성공' : '✕ 실패' %></span></td>
-          <td class="mono small"><%= h.reason || '' %></td><td class="mono small"><%= h.ip || '' %></td></tr>
+          <td class="small"><%= h.success ? '' : loginReason(h.reason) %></td><td class="mono small"><%= h.ip || '' %></td></tr>
       <% }) %>
     </tbody>
   </table>
 </section>
 
 <section class="card" id="permissions">
-  <h2>역할별 권한 <span class="tag">FR-23 · NFR-03 · #205·#206</span></h2>
+  <h2>역할별 권한</h2>
   <p class="form-row">
     <% permissions.roles.forEach((r) => { %><a class="button small <%= editRole === r.role ? '' : 'ghost' %>" href="/admin?role=<%= r.role %>#permissions"><%= r.label %></a><% }) %>
   </p>
@@ -104,12 +112,12 @@
       </table>
     </div>
     <div class="form-row"><input name="reason" maxlength="500" placeholder="바꾸는 이유"><button><%= roleInfo[editRole].label %> 권한 저장</button></div>
-    <p class="hint">저장하면 모든 권한 검사에 바로 반영됩니다. 기본값으로 되돌리려면 기본값이 '허용'인 것만 체크해 저장하세요. 관리 범위(BR-05)·역할 순위(BR-04) 검사는 그대로 적용됩니다.</p>
+    <p class="hint">저장하면 바로 적용됩니다. 기본값으로 되돌리려면 기본값이 '허용'인 것만 체크해 저장하세요. 담당 Crew 범위와 역할 순위 확인은 권한 설정과 별개로 항상 적용됩니다.</p>
   </form>
 </section>
 
 <section class="card" id="settings">
-  <h2>운영 설정 <span class="tag">FR-23 · #207·#208</span></h2>
+  <h2>운영 설정</h2>
   <form method="post" action="/admin/settings">
     <table>
       <thead><tr><th>항목</th><th>값</th><th>설명</th><th>기본값</th></tr></thead>

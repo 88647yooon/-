@@ -12,7 +12,8 @@ const {
   RESOURCE_STATUS_INFO, RESOURCE_MIN_ROLES, MAINTENANCE_SOURCE_INFO, MAINTENANCE_RESULT_INFO, RETURN_CONDITION_INFO,
   RESOURCE_RELEASE_REASON_INFO, EVALUATION_STATUS_INFO, APPEAL_STATUS_INFO, REPUTATION_EVENT_KIND_INFO, CHANGE_TYPE_INFO,
 } = require('./constants');
-const { SORTS } = require('../routes/rules');
+const { ACTION_LABELS } = require('./actions');
+const { SORTS, fields: rules } = require('../routes/rules');
 
 const accountRows = seedData.users
   .map((u) => `| ${u.username} | ${ROLE_INFO[u.role].label} | ${MEMBER_STATUS_INFO[u.status].label} |`)
@@ -24,7 +25,7 @@ const crewRows = seedData.crews
 const description = `
 The Family 통합 정보시스템 REST API (학번 202211207)
 
-[웹 화면(홈)](/)에서도 단계별 기능 요구사항 확인 목록과 업무 규칙 확인 시나리오를 따라 기능을 확인할 수 있다.
+같은 기능을 [웹 화면](/)에서도 쓸 수 있다. 요구사항별 확인 방법과 업무 규칙 확인 시나리오는 \`docs/requirements_check.md\`에 있다.
 
 ### 사용 방법
 1. **인증 → POST /api/auth/login**에서 아래 테스트 계정으로 로그인한다.
@@ -245,6 +246,7 @@ const definition = {
       AssignmentReleaseReason: enumSchema(ASSIGNMENT_RELEASE_REASON_INFO, '배정이 끝난 이유'),
       TaskOutcome: enumSchema(TASK_OUTCOME_INFO, '업무 성과'),
       AssignableRole: { type: 'string', enum: [...ASSIGNABLE_ROLES], description: '업무를 맡을 수 있는 역할' },
+      ActionCode: { type: 'string', enum: Object.keys(ACTION_LABELS), description: '행위 코드 (이력·감사 기록의 action)' },
       ResourceStatus: {
         type: 'string',
         enum: Object.keys(RESOURCE_STATUS_INFO),
@@ -282,9 +284,9 @@ const definition = {
         type: 'object',
         required: ['code', 'name', 'categoryId'],
         properties: {
-          code: { type: 'string', maxLength: 30, example: 'VH-010', description: '관리 번호 (겹칠 수 없다)' },
-          name: { type: 'string', maxLength: 100, example: '승합차 10호' },
-          categoryId: { type: 'integer', example: 1 },
+          code: { type: 'string', maxLength: 30, pattern: rules.resourceCode.pattern.source, example: 'VH-010', description: '관리 번호 (겹칠 수 없다)' },
+          name: { type: 'string', minLength: 1, maxLength: 100, example: '승합차 10호' },
+          categoryId: { type: 'integer', minimum: 1, example: 1 },
           location: { type: 'string', nullable: true, maxLength: 100, example: '강북 차고' },
           description: { type: 'string', nullable: true, maxLength: 1000 },
           minRole: ref('ResourceMinRole'),

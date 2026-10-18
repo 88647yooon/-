@@ -1,16 +1,22 @@
 <%- include('partials/head') %>
 <% const typeLabels = { users: '구성원', crews: 'Crew', tasks: '업무', resources: '자원' }; const chosen = query.types && query.types.length ? query.types : []; %>
-<h1>통합 검색 <span class="tag">FR-21 · NFR-04</span></h1>
+<%- include('partials/crumbs') %>
+<div class="page-head">
+  <div>
+    <h1>통합 검색</h1>
+    <p class="page-desc">구성원·Crew·업무·자원을 한 번에 찾고, 자주 쓰는 검색 조건을 저장합니다.</p>
+  </div>
+</div>
 
 <section class="card">
-  <form method="get" action="/search" class="form-row">
+  <form method="get" action="/search" class="form-row filters">
     <input name="q" value="<%= query.q || '' %>" placeholder="이름, 아이디, 업무 제목, 자원 이름·관리 번호·위치" size="34" required maxlength="50">
     <% Object.entries(typeLabels).forEach(([key, label]) => { %>
-      <label class="small"><input type="checkbox" name="types" value="<%= key %>" <%= chosen.includes(key) ? 'checked' : '' %>> <%= label %></label>
+      <label class="check"><input type="checkbox" name="types" value="<%= key %>" <%= chosen.includes(key) ? 'checked' : '' %>> <%= label %></label>
     <% }) %>
     <button>검색</button>
   </form>
-  <p class="hint">종류를 고르지 않으면 모두 찾습니다. 결과는 종류마다 지금 계정의 권한 범위 안에서만 나옵니다 (예: Associate는 구성원 목록을, Soldier는 내가 참여 중인 업무와 내 역할로 이용할 수 있는 자원만).</p>
+  <p class="hint">종류를 고르지 않으면 모두 찾습니다. 결과는 내 권한으로 볼 수 있는 범위 안에서만 나옵니다.</p>
   <% if (result) { %>
     <form method="post" action="/saved-searches" class="form-row">
       <input type="hidden" name="q" value="<%= result.q %>">
@@ -30,9 +36,9 @@
         <% if (r.restricted) { %>
           <p class="denied"><%= r.message %></p>
         <% } else if (!r.items.length) { %>
-          <p class="muted">찾은 결과가 없습니다.</p>
+          <p class="empty">찾은 결과가 없습니다.</p>
         <% } else { %>
-          <ul>
+          <ul class="feed">
             <% r.items.forEach((x) => { %>
               <% if (type === 'users') { %><li><a href="/users/<%= x.id %>"><%= x.name %></a> <span class="muted small">@<%= x.username %> · <%= x.roleLabel %> · <%= x.statusLabel %><%= x.crew ? ' · ' + x.crew.name : '' %></span></li>
               <% } else if (type === 'crews') { %><li><a href="/crews/<%= x.id %>"><%= x.name %></a> <span class="muted small"><%= x.region %> · <%= x.statusLabel %> · 소속원 <%= x.memberCount %>명</span></li>
@@ -48,9 +54,9 @@
 <% } %>
 
 <section class="card">
-  <h2>저장한 검색 <span class="tag">FR-21</span></h2>
+  <h2>저장한 검색</h2>
   <% if (saved.length) { %>
-    <ul>
+    <ul class="feed">
       <% saved.forEach((s) => { %>
         <li><a href="/saved-searches/<%= s.id %>"><%= s.name %></a> <span class="muted small">'<%= s.q %>' · <%= s.types.map((t) => typeLabels[t]).join(', ') %> · <%= s.runCount %>회 실행</span>
           <form method="post" action="/saved-searches/<%= s.id %>/delete"><button class="ghost small">삭제</button></form></li>

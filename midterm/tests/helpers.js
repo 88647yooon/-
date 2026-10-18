@@ -7,6 +7,9 @@ const database = require('../config/database');
 const { seed } = require('../models/seed');
 const createApp = require('../createApp');
 
+// 통합 점검(tests/integration-check.js)이 모든 API가 실제로 실행됐는지 세도록, API_CALL_LOG 파일에 API 호출 결과를 한 줄씩 남긴다.
+const CALL_LOG = process.env.API_CALL_LOG;
+
 async function startServer() {
   await database.connect();
   await seed();
@@ -23,6 +26,7 @@ async function startServer() {
       payload = raw !== undefined ? raw : JSON.stringify(body);
     }
     const res = await fetch(base + url, { method, headers, body: payload });
+    if (CALL_LOG && url.startsWith('/api/')) fs.appendFileSync(CALL_LOG, `${JSON.stringify({ method, url, status: res.status })}\n`);
     const text = await res.text();
     let json = null;
     try {

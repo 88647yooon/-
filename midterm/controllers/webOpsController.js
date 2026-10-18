@@ -1,4 +1,4 @@
-// 운영 현황 대시보드·통합 검색·관리자 웹 화면 (CR-02). 단계 6의 기능 요구사항(FR-21~FR-23, NFR-04)을 브라우저에서 확인할 수 있게 한다.
+// 운영 현황·통합 검색·시스템 관리 웹 화면 (CR-02, FR-21~FR-23, NFR-04).
 // REST API와 같은 서비스 계층과 같은 권한 키를 쓴다. 관리자 화면에 권한 없이 들어오면 403 화면이 나오고 권한 거부 기록이 남는다 (BR-09).
 const statsService = require('../services/statsService');
 const searchService = require('../services/searchService');
@@ -95,7 +95,7 @@ async function adminPage(req, res) {
     adminService.health(),
   ]);
   res.render('admin', {
-    title: '관리자', query, accounts: accounts.data, meta: accounts.meta, history: history.data, permissions, settings, integrity, health,
+    title: '시스템 관리', query, accounts: accounts.data, meta: accounts.meta, history: history.data, permissions, settings, integrity, health,
     editRole: query.role ?? 'SOLDIER', roleInfo: ROLE_INFO,
   });
 }

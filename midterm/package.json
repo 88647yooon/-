@@ -5,6 +5,7 @@
   "main": "app.js",
   "scripts": {
     "test": "node --test --test-concurrency=1 'tests/*.test.js'",
+    "check:integration": "node tests/integration-check.js",
     "start": "node app.js",
     "reset": "node app.js --reset"
   },

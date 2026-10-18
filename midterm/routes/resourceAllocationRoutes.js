@@ -31,7 +31,7 @@ const allocationParams = { params: { allocationId: fields.id } };
  *             type: object
  *             required: [userId, startAt, endAt]
  *             properties:
- *               userId: { type: integer, example: 8 }
+ *               userId: { type: integer, minimum: 1, example: 8 }
  *               startAt: { type: string, format: date-time, example: '2026-10-25T09:00:00+09:00' }
  *               endAt: { type: string, format: date-time, example: '2026-10-25T18:00:00+09:00' }
  *               purpose: { type: string, maxLength: 500, example: 거래처 방문 }

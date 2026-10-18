@@ -1,28 +1,28 @@
 <%- include('partials/head') %>
-<section class="card narrow">
-  <h1>로그인</h1>
-  <form method="post" action="/login" class="stack">
-    <label>아이디 <input name="username" autocomplete="username" required></label>
-    <label>비밀번호 <input name="password" type="password" autocomplete="current-password" required></label>
-    <input type="hidden" name="next" value="<%= next %>">
-    <div><button>로그인</button></div>
-  </form>
-</section>
-
-<section class="card narrow">
-  <h2>테스트 계정으로 로그인</h2>
-  <p class="section-note muted">비밀번호는 모두 <code><%= seedPassword %></code>입니다. 정지·탈퇴 계정은 로그인이 거부됩니다.</p>
-  <div class="chips">
-    <% accounts.forEach((a) => { %>
-      <form method="post" action="/login">
-        <input type="hidden" name="username" value="<%= a.username %>">
-        <input type="hidden" name="password" value="<%= seedPassword %>">
-        <input type="hidden" name="next" value="<%= next %>">
-        <button class="chip small" title="<%= a.name %>">
-          <%= a.username %><span><%= C.ROLE_INFO[a.role].label %><%= a.status !== 'ACTIVE' ? ' · ' + C.MEMBER_STATUS_INFO[a.status].label : '' %></span>
-        </button>
-      </form>
-    <% }) %>
-  </div>
-</section>
+<div class="login">
+  <section class="login-brand">
+    <span class="brand-mark">TF</span>
+    <div>
+      <h1>The Family 통합 정보시스템</h1>
+      <p>조직 구성원과 Crew, 업무, 공용 자원, 평가를 한곳에서 관리합니다.</p>
+    </div>
+    <ul>
+      <li>업무 배정과 일정, 진행 상황 관리</li>
+      <li>공용 자원 예약·사용·반환과 점검</li>
+      <li>평가·평판과 변경 이력, 감사 기록</li>
+      <li>운영 현황과 통합 검색</li>
+    </ul>
+  </section>
+  <section class="login-form">
+    <h2>로그인</h2>
+    <p class="muted small">발급받은 아이디와 비밀번호를 입력하세요.</p>
+    <form method="post" action="/login" class="stack">
+      <label>아이디 <input name="username" autocomplete="username" autofocus required></label>
+      <label>비밀번호 <input name="password" type="password" autocomplete="current-password" required></label>
+      <input type="hidden" name="next" value="<%= next %>">
+      <button>로그인</button>
+    </form>
+    <p class="login-foot">계정이 잠기거나 비밀번호를 잊었으면 시스템 관리자에게 문의하세요.</p>
+  </section>
+</div>
 <%- include('partials/foot') %>

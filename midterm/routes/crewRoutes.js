@@ -36,7 +36,7 @@ const crewText = {
  *               name: { type: string, maxLength: 50, example: Eastside }
  *               region: { type: string, maxLength: 50, example: 서울 강동 }
  *               description: { type: string, nullable: true, maxLength: 500 }
- *               underbossId: { type: integer, description: 담당 Underboss (Boss만 지정 가능) }
+ *               underbossId: { type: integer, minimum: 1, example: 3, description: 담당 Underboss (Boss만 지정 가능) }
  *     responses:
  *       201: { $ref: '#/components/responses/CrewOne' }
  *       400: { $ref: '#/components/responses/BadRequest' }
@@ -51,7 +51,7 @@ const crewText = {
  *       [FR-05, FR-21] 지역·상태·담당 Underboss로 거르고, 이름·설명으로 검색하고, 정렬·페이지 단위로 조회한다.
  *       각 Crew의 책임자, 담당 Underboss, 현재 인원(정식·임시)을 함께 보여 준다.
  *     parameters:
- *       - { name: region, in: query, schema: { type: string, example: 서울 강북 } }
+ *       - { name: region, in: query, schema: { type: string, maxLength: 50, example: 서울 강북 } }
  *       - $ref: '#/components/parameters/CrewStatusFilter'
  *       - { name: underbossId, in: query, schema: { type: integer, minimum: 1 } }
  *       - $ref: '#/components/parameters/Q'
@@ -143,6 +143,7 @@ router.get(
  *                   properties:
  *                     id: { type: integer }
  *                     deleted: { type: boolean, example: true }
+ *       400: { $ref: '#/components/responses/BadRequest' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
@@ -217,7 +218,7 @@ router.patch(
  *             type: object
  *             required: [userId]
  *             properties:
- *               userId: { type: integer, example: 5 }
+ *               userId: { type: integer, minimum: 1, example: 5 }
  *               reason: { type: string, maxLength: 500 }
  *     responses:
  *       200: { $ref: '#/components/responses/CrewOne' }
@@ -235,6 +236,7 @@ router.patch(
  *       - $ref: '#/components/parameters/CrewId'
  *     responses:
  *       200: { $ref: '#/components/responses/CrewOne' }
+ *       400: { $ref: '#/components/responses/BadRequest' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
@@ -266,7 +268,7 @@ router.delete('/:crewId/capo', requirePermission('crew.capo.assign'), validate(c
  *             type: object
  *             required: [userId]
  *             properties:
- *               userId: { type: integer, example: 3 }
+ *               userId: { type: integer, minimum: 1, example: 3 }
  *     responses:
  *       200: { $ref: '#/components/responses/CrewOne' }
  *       400: { $ref: '#/components/responses/BadRequest' }

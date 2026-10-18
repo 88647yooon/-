@@ -31,8 +31,8 @@ const regularByDefault = { ...enums.membershipType, default: 'REGULAR' };
  *             type: object
  *             required: [sourceCrewId, targetCrewId]
  *             properties:
- *               sourceCrewId: { type: integer, description: 해산될 원 Crew, example: 3 }
- *               targetCrewId: { type: integer, description: 소속원을 받을 Crew, example: 1 }
+ *               sourceCrewId: { type: integer, minimum: 1, description: 해산될 원 Crew, example: 3 }
+ *               targetCrewId: { type: integer, minimum: 1, description: 소속원을 받을 Crew, example: 1 }
  *               reason: { type: string, maxLength: 500 }
  *     responses:
  *       200:
@@ -103,7 +103,7 @@ router.post(
  *             type: object
  *             required: [userId]
  *             properties:
- *               userId: { type: integer, example: 13 }
+ *               userId: { type: integer, minimum: 1, example: 13 }
  *               type: { allOf: [{ $ref: '#/components/schemas/MembershipType' }], default: REGULAR }
  *               note: { type: string, maxLength: 200 }
  *     responses:
@@ -154,7 +154,7 @@ router.post(
  *                   type: object
  *                   required: [userId]
  *                   properties:
- *                     userId: { type: integer }
+ *                     userId: { type: integer, minimum: 1 }
  *                     type: { allOf: [{ $ref: '#/components/schemas/MembershipType' }], default: REGULAR }
  *               note: { type: string, maxLength: 200 }
  *             example:
@@ -284,7 +284,7 @@ router.delete('/:crewId/members/:userId', requirePermission('crew.members.manage
  *             type: object
  *             required: [targetCrewId]
  *             properties:
- *               targetCrewId: { type: integer, example: 2 }
+ *               targetCrewId: { type: integer, minimum: 1, example: 2 }
  *               type: { $ref: '#/components/schemas/MembershipType' }
  *               note: { type: string, maxLength: 200 }
  *     responses:

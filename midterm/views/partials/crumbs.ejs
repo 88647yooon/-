@@ -1,0 +1,6 @@
+<nav class="crumbs" aria-label="현재 위치">
+  <a href="/">업무 홈</a>
+  <% if (current && current.group) { %><span><%= current.group %></span><% } %>
+  <% if (current && current.item.href !== '/') { %><a href="<%= current.item.href %>"><%= current.item.label %></a><% } %>
+  <% (locals.trail || []).forEach((t) => { %><% if (t.href) { %><a href="<%= t.href %>"><%= t.label %></a><% } else { %><span><%= t.label %></span><% } %><% }) %>
+</nav>

@@ -1,8 +1,15 @@
 <%- include('partials/head') %>
-<h1>내 자원 <span class="tag">FR-14 · FR-15 · FR-17</span></h1>
+<%- include('partials/crumbs') %>
+<div class="page-head">
+  <div>
+    <h1>내 자원</h1>
+    <p class="page-desc">사용 중인 자원을 반환하고, 배정된 자원의 사용을 시작하고, 자원 사용을 신청합니다.</p>
+  </div>
+  <% if (can('resource.request')) { %><div class="page-actions"><a class="button" href="#requests">자원 사용 신청</a></div><% } %>
+</div>
 
 <section class="card">
-  <h2>지금 사용 중인 자원 <span class="tag">FR-15</span></h2>
+  <h2>지금 사용 중인 자원</h2>
   <% if (usages.length) { %>
     <div class="table-wrap">
       <table>
@@ -27,11 +34,11 @@
         </tbody>
       </table>
     </div>
-  <% } else { %><p class="muted">사용 중인 자원이 없습니다.</p><% } %>
+  <% } else { %><p class="empty">사용 중인 자원이 없습니다.</p><% } %>
 </section>
 
 <section class="card">
-  <h2>나에게 배정된 자원 <span class="tag">FR-14 · FR-17</span></h2>
+  <h2>나에게 배정된 자원</h2>
   <% if (allocations.length) { %>
     <div class="table-wrap">
       <table>
@@ -53,12 +60,12 @@
       </table>
     </div>
     <p class="hint">사용은 배정 시간대 안에서만 시작할 수 있습니다. 반환하면 배정도 끝나 남은 시간대가 비워집니다.</p>
-  <% } else { %><p class="muted">배정된 자원이 없습니다. 업무에 할당된 자원은 업무 화면에서 사용을 시작합니다.</p><% } %>
+  <% } else { %><p class="empty">배정된 자원이 없습니다. 업무에 할당된 자원은 업무 화면에서 사용을 시작합니다.</p><% } %>
 </section>
 
 <% if (can('resource.request')) { %>
-  <section class="card">
-    <h2>자원 사용 신청 <span class="tag">FR-14 · FR-17 · BR-07 · BR-08</span></h2>
+  <section class="card" id="requests">
+    <h2>자원 사용 신청</h2>
     <form method="post" action="/resource-requests">
       <div class="form-row">
         <label>관리 번호 <input name="code" required maxlength="30" placeholder="예: RD-002" size="10"></label>
@@ -66,7 +73,7 @@
         <label>종료 <input name="endAt" type="datetime-local" required></label>
       </div>
       <input name="reason" required maxlength="500" placeholder="사유" size="40"> <button>신청</button>
-      <p class="hint">관리 번호는 <a href="/resources">자원</a> 화면에서 확인하세요. 내 역할보다 높은 최소 역할의 자원은 신청할 수 없고, 점검중·사용불가(BR-08)이거나 그 시간대에 이미 예약된(BR-07) 자원은 거부됩니다.</p>
+      <p class="hint">관리 번호는 <a href="/resources">공용 자원</a>에서 확인하세요. 내 역할로 이용할 수 없는 자원, 점검중·사용불가 자원, 그 시간대에 이미 예약된 자원은 신청할 수 없습니다.</p>
     </form>
 
     <h3>내 신청</h3>
@@ -92,8 +99,8 @@
 <% } %>
 
 <% if (can('resource.request.review')) { %>
-  <section class="card">
-    <h2>처리할 사용 신청 <span class="tag">FR-17 · BR-05</span></h2>
+  <section class="card" id="review">
+    <h2>처리할 사용 신청</h2>
     <% if (review.length) { %>
       <div class="table-wrap">
         <table>
@@ -114,8 +121,8 @@
           </tbody>
         </table>
       </div>
-      <p class="hint">승인하면 그 시점에 BR-07·BR-08을 다시 검사하고 신청자에게 자원을 배정합니다. <%= me.role === 'CAPO' ? 'Capo는 자기 Crew 소속원의 신청만 봅니다.' : '' %></p>
-    <% } else { %><p class="muted">처리할 신청이 없습니다.</p><% } %>
+      <p class="hint">승인하면 자원 상태와 그 시간대 예약을 다시 확인한 뒤 신청자에게 자원을 배정합니다. <%= me.role === 'CAPO' ? '내 Crew 소속원의 신청만 보입니다.' : '' %></p>
+    <% } else { %><p class="empty">처리할 신청이 없습니다.</p><% } %>
   </section>
 <% } %>
 <%- include('partials/foot') %>

@@ -29,7 +29,7 @@ const requestParams = { params: { requestId: fields.id } };
  *             type: object
  *             required: [userId, role, reason]
  *             properties:
- *               userId: { type: integer, example: 12 }
+ *               userId: { type: integer, minimum: 1, example: 12 }
  *               role: { $ref: '#/components/schemas/Role' }
  *               reason: { type: string, maxLength: 500, example: 맡은 일을 꾸준히 해냈습니다. }
  *     responses:

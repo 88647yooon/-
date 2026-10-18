@@ -673,9 +673,18 @@ describe('역할 변경 요청 (#51~#55)', () => {
     expectError(await api('POST', '/api/role-change-requests', { token: tokens.capo1, body: { userId: u.id, role: 'SOLDIER', reason: '중복' } }), 409, 'CONFLICT');
     expectError(await api('POST', `/api/role-change-requests/${request.id}/approve`, { token: tokens.capo1 }), 403, 'FORBIDDEN');
 
+    const pending = await api('GET', `/api/role-change-requests/${request.id}`, { token: tokens.capo1 });
+    assert.equal(pending.status, 200, pending.text);
+    assert.deepEqual([pending.body.data.user.id, pending.body.data.status, pending.body.data.requestedBy.username, pending.body.data.decidedBy], [u.id, 'PENDING', 'capo1', null]);
+
     const approved = await api('POST', `/api/role-change-requests/${request.id}/approve`, { token: tokens.underboss1 });
     assert.equal(approved.status, 200, approved.text);
     assert.equal(approved.body.data.status, 'APPROVED');
+    const detail = await api('GET', `/api/role-change-requests/${request.id}`, { token: tokens.underboss1 });
+    assert.equal(detail.status, 200, detail.text);
+    assert.deepEqual([detail.body.data.status, detail.body.data.decidedBy.username], ['APPROVED', 'underboss1']);
+    assert.ok(detail.body.data.decidedAt);
+    expectError(await api('GET', '/api/role-change-requests/999999999', { token: tokens.boss }), 404, 'NOT_FOUND');
     assert.equal((await api('GET', `/api/users/${u.id}`, { token: tokens.boss })).body.data.role, 'SOLDIER');
     assert.equal((await latestLog('USER_ROLE_CHANGED', u.id)).after.requestId, request.id);
     expectError(await api('POST', `/api/role-change-requests/${request.id}/reject`, { token: tokens.underboss1, body: { reason: 'x' } }), 409, 'CONFLICT');

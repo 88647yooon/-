@@ -10,9 +10,15 @@
     { status: 'UNAVAILABLE', label: '사용불가', icon: '✕', color: 'var(--status-critical)' },
   ];
 %>
-<h1>운영 현황 <span class="tag">FR-22</span></h1>
+<%- include('partials/crumbs') %>
+<div class="page-head">
+  <div>
+    <h1>운영 현황</h1>
+    <p class="page-desc">구성원·Crew·업무·자원의 운영 지표를 기간별로 봅니다. 기준 시각 <%= fmt(now) %></p>
+  </div>
+</div>
 
-<form method="get" action="/dashboard" class="form-row">
+<form method="get" action="/dashboard" class="form-row filters">
   <label>기간
     <select name="days"><% [[7, '최근 7일'], [30, '최근 30일'], [90, '최근 90일']].forEach(([v, l]) => { %><option value="<%= v %>" <%= days === v ? 'selected' : '' %>><%= l %></option><% }) %></select>
   </label>
@@ -20,7 +26,7 @@
     <select name="interval"><% [['day', '일'], ['week', '주'], ['month', '월']].forEach(([v, l]) => { %><option value="<%= v %>" <%= interval === v ? 'selected' : '' %>><%= l %></option><% }) %></select>
   </label>
   <button>적용</button>
-  <span class="hint">기간은 아래 모든 통계에 적용됩니다 (업무 추이는 예정된 업무가 보이도록 앞으로 <%= days %>일까지). 기준 시각 <%= fmt(now) %></span>
+  <span class="hint">기간은 아래 모든 통계에 적용됩니다. 업무 추이는 예정된 업무가 보이도록 앞으로 <%= days %>일까지 보여 줍니다.</span>
 </form>
 
 <div class="stat-row">
@@ -53,7 +59,7 @@
 </div>
 
 <section class="card viz">
-  <h2>업무 상태 추이 <span class="tag">FR-22 · #189</span></h2>
+  <h2>업무 상태 추이</h2>
   <p class="section-note muted">일정 시작일로 묶은 업무 수를 지금 상태별로 쌓았습니다. 막대에 마우스를 올리거나 Tab으로 이동하면 값이 보입니다.</p>
   <div class="legend"><% taskStatuses.forEach((s) => { %><span class="key"><span class="swatch" style="background: <%= s.color %>"></span><%= s.label %></span><% }) %></div>
   <% const maxTotal = Math.max(1, ...trend.buckets.map((b) => b.total)); const half = Math.ceil(maxTotal / 2); const scale = half * 2;
@@ -94,7 +100,7 @@
 
 <div class="cols">
   <section class="card viz">
-    <h2>자원 상태와 가동률 <span class="tag">FR-16 · FR-22 · #191</span></h2>
+    <h2>자원 상태와 가동률</h2>
     <div class="legend"><% resourceStates.forEach((s) => { %><span class="key"><span class="swatch" style="background: <%= s.color %>"></span><span class="status-icon"><%= s.icon %></span><%= s.label %></span><% }) %></div>
     <% const maxRes = Math.max(1, ...resources.categories.map((c) => c.total)); %>
     <div class="hbars">
@@ -126,7 +132,7 @@
   </section>
 
   <section class="card viz">
-    <h2>자원 사용 순위 <span class="tag">FR-15 · #192</span></h2>
+    <h2>자원 사용 순위</h2>
     <p class="section-note muted">지난 <%= days %>일 사용 시간</p>
     <% const maxHours = Math.max(0.1, ...ranking.map((r) => r.usedHours)); %>
     <% if (ranking.length) { %>
@@ -150,7 +156,7 @@
 </div>
 
 <section class="card">
-  <h2>Crew 비교 <span class="tag">FR-22 · #187</span></h2>
+  <h2>Crew 비교</h2>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Crew</th><th>책임자</th><th>정식/임시</th><th>업무 (진행/완료/취소)</th><th>완료율</th><th>평가 평균</th></tr></thead>
@@ -169,12 +175,12 @@
       </tbody>
     </table>
   </div>
-  <p class="hint">업무는 일정 시작이 지난 <%= days %>일~앞으로 <%= days %>일 안인 것, 완료율 = 완료 / (완료 + 취소)입니다. 평가 평균은 MongoDB에서 집계합니다.</p>
+  <p class="hint">업무는 일정 시작이 지난 <%= days %>일~앞으로 <%= days %>일 안인 것, 완료율 = 완료 / (완료 + 취소)입니다.</p>
 </section>
 
 <div class="cols">
   <section class="card">
-    <h2>구성원 분포 <span class="tag">FR-04 · #186</span></h2>
+    <h2>구성원 분포</h2>
     <table>
       <thead><tr><th>역할</th><% members.statuses.forEach((s) => { %><th><%= s.label %></th><% }) %><th>합계</th></tr></thead>
       <tbody>
@@ -184,12 +190,12 @@
     </table>
   </section>
   <section class="card">
-    <h2>지역별 <span class="tag">#188</span></h2>
+    <h2>지역별</h2>
     <table>
       <thead><tr><th>지역</th><th>Crew (활성)</th><th>소속원</th><th>업무</th></tr></thead>
       <tbody><% regions.forEach((r) => { %><tr><td><%= r.region %></td><td class="mono"><%= r.crews %> (<%= r.activeCrews %>)</td><td class="mono"><%= r.members %></td><td class="mono"><%= r.tasks %></td></tr><% }) %></tbody>
     </table>
-    <h3>중요도별 소요 시간 <span class="tag">#190</span></h3>
+    <h3>중요도별 소요 시간</h3>
     <table>
       <thead><tr><th>중요도</th><th>완료</th><th>평균 소요</th><th>평균 계획</th><th>평균 지연</th></tr></thead>
       <tbody><% leadTimes.priorities.forEach((p) => { %><tr><td><%= p.label %></td><td class="mono"><%= p.completedCount %></td><td class="mono"><%= p.averageLeadHours ?? '-' %>h</td><td class="mono"><%= p.averagePlannedHours ?? '-' %>h</td><td class="mono"><%= p.averageDelayHours ?? '-' %>h</td></tr><% }) %></tbody>
@@ -200,8 +206,8 @@
 
 <div class="cols">
   <section class="card viz">
-    <h2>평가 평균 추이 <span class="tag">FR-18 · #193</span></h2>
-    <p class="section-note muted">유효한 평가의 평균 점수 (5점 만점, MongoDB aggregate)</p>
+    <h2>평가 평균 추이</h2>
+    <p class="section-note muted">유효한 평가의 평균 점수 (5점 만점)</p>
     <div class="columns" role="img" aria-label="기간별 평가 평균" style="height: 140px">
       <span class="y-max">2.5</span>
       <% evaluations.buckets.forEach((b) => { %>
@@ -224,7 +230,7 @@
   </section>
 
   <section class="card">
-    <h2>소속 변화 <span class="tag">BR-10 · #194</span></h2>
+    <h2>소속 변화</h2>
     <div class="stat-row">
       <div class="stat"><div class="label">새 소속</div><div class="value"><%= changes.totals.joined %></div></div>
       <div class="stat"><div class="label">이동</div><div class="value"><%= changes.totals.transferred %></div></div>
@@ -236,12 +242,12 @@
       <table><thead><tr><th>기간</th><th>새 소속</th><th>이동</th><th>제외</th><th>탈퇴</th></tr></thead>
         <tbody><% changes.buckets.filter((b) => b.joined + b.transferred + b.removed + b.withdrawn).forEach((b) => { %><tr><td><%= b.period %></td><td class="mono"><%= b.joined %></td><td class="mono"><%= b.transferred %></td><td class="mono"><%= b.removed %></td><td class="mono"><%= b.withdrawn %></td></tr><% }) %></tbody></table>
     </details>
-    <p class="hint">지난 <%= days %>일의 Crew 소속 기록 (SQL)</p>
+    <p class="hint">지난 <%= days %>일의 Crew 소속 기록</p>
   </section>
 </div>
 
-<section class="card">
-  <h2>운영 경고 <span class="tag">FR-15 · FR-16 · #196</span></h2>
+<section class="card" id="alerts">
+  <h2>운영 경고</h2>
   <div class="cols">
     <div>
       <h3><span class="status-icon" style="color: var(--err-ink)">✕</span> 반환 연체 자원 <%= alerts.counts.overdueUsages %>건</h3>
@@ -261,8 +267,8 @@
 
 <% if (adminActivity) { %>
   <section class="card viz">
-    <h2>관리 활동 <span class="tag">FR-20 · #195</span></h2>
-    <p class="section-note muted">지난 <%= days %>일 활동 기록 <%= adminActivity.total %>건 (MongoDB aggregate)</p>
+    <h2>관리 활동</h2>
+    <p class="section-note muted">지난 <%= days %>일 활동 기록 <%= adminActivity.total %>건</p>
     <% const maxArea = Math.max(1, ...adminActivity.areas.map((a) => a.count)); %>
     <div class="hbars">
       <% adminActivity.areas.filter((a) => a.count).forEach((a) => { %>

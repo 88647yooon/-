@@ -1,12 +1,17 @@
 <%- include('partials/head') %>
 <% const e = evaluation; %>
-<h1>평가 <span class="badge"><%= e.statusLabel %></span></h1>
-<p class="muted"><a href="/tasks/<%= e.task.id %>"><%= e.task.title %></a> · 대상자 <a href="/users/<%= e.evaluatee.id %>"><%= e.evaluatee.name %></a>
-  · 평가자 <%= e.evaluator.name %> · <%= fmt(e.createdAt) %></p>
+<%- include('partials/crumbs', { trail: [{ label: e.task.title + ' 평가' }] }) %>
+<div class="page-head">
+  <div>
+    <h1><%= e.evaluatee.name %> 평가 <span class="badge <%= e.status === 'ACTIVE' ? 'ok' : '' %>"><%= e.statusLabel %></span></h1>
+    <p class="page-desc">업무 <a href="/tasks/<%= e.task.id %>"><%= e.task.title %></a> · 대상자 <a href="/users/<%= e.evaluatee.id %>"><%= e.evaluatee.name %></a>
+      · 평가자 <%= e.evaluator.name %> · <%= fmt(e.createdAt) %></p>
+  </div>
+</div>
 
 <div class="cols">
   <section class="card">
-    <h2>점수 <span class="tag">FR-18</span></h2>
+    <h2>점수</h2>
     <table>
       <thead><tr><th>항목</th><th>가중치</th><th>점수</th></tr></thead>
       <tbody>
@@ -23,7 +28,7 @@
   </section>
 
   <section class="card">
-    <h2>수정·정정 이력 <span class="tag">BR-10</span></h2>
+    <h2>수정·정정 이력</h2>
     <% if (e.revisions.length) { %>
       <ul>
         <% e.revisions.forEach((r) => { %>
@@ -48,7 +53,7 @@
 
 <% if (e.status === 'ACTIVE') { %>
   <section class="card">
-    <h2>처리 <span class="tag">FR-18 · BR-10</span></h2>
+    <h2>처리</h2>
     <div class="forms">
       <% if (e.editable) { %>
         <form method="post" action="/evaluations/<%= e.id %>/edit">

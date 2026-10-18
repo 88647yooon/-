@@ -29,7 +29,7 @@ const requestParams = { params: { requestId: fields.id } };
  *             type: object
  *             required: [resourceId, startAt, endAt, reason]
  *             properties:
- *               resourceId: { type: integer, example: 2 }
+ *               resourceId: { type: integer, minimum: 1, example: 2 }
  *               startAt: { type: string, format: date-time, example: '2026-10-25T13:00:00+09:00' }
  *               endAt: { type: string, format: date-time, example: '2026-10-25T17:00:00+09:00' }
  *               reason: { type: string, maxLength: 500, example: 거래처 방문 }

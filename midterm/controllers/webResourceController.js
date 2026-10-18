@@ -1,4 +1,4 @@
-// 공용 자원 웹 화면 (CR-02). 단계 4의 기능 요구사항(FR-13~FR-17)을 브라우저에서 확인할 수 있게 한다.
+// 공용 자원 웹 화면 (CR-02): 공용 자원, 자원 상세, 내 자원 (FR-13~FR-17).
 // REST API와 같은 서비스 계층을 호출하므로 자원 배정 규칙(BR-07·BR-08)과 관리 범위(BR-05)가 API와 똑같이 적용된다.
 const resourceCategoryService = require('../services/resourceCategoryService');
 const resourceService = require('../services/resourceService');

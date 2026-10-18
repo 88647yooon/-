@@ -1,6 +1,15 @@
+<% if (me) { %>
+  </main>
+  <footer class="app-foot">The Family 통합 정보시스템 · 202211207</footer>
+</div>
+<script>
+  // 사용자 메뉴는 바깥을 누르면 닫는다.
+  document.addEventListener('click', (e) => {
+    document.querySelectorAll('details.user-menu[open]').forEach((d) => { if (!d.contains(e.target)) d.removeAttribute('open'); });
+  });
+</script>
+<% } else { %>
 </main>
-<footer class="wrap foot">
-  The Family 통합 정보시스템 · 학번 202211207 · 모든 기능은 <a href="/api-docs">Swagger API 문서</a>에서도 실행할 수 있습니다.
-</footer>
+<% } %>
 </body>
 </html>

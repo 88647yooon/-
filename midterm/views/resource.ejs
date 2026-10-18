@@ -1,17 +1,26 @@
 <%- include('partials/head') %>
-<h1><%= resource.name %> <span class="mono small"><%= resource.code %></span>
-  <span class="badge res-<%= resource.status %>"><%= resource.statusLabel %></span>
-</h1>
-<p class="muted"><%= resource.category.name %><%= resource.location ? ' · ' + resource.location : '' %> · <%= resource.minRoleLabel %> 이상 이용 · <a href="/resources">자원 목록</a></p>
+<%- include('partials/crumbs', { trail: [{ label: resource.code }] }) %>
+<div class="page-head">
+  <div>
+    <h1><%= resource.name %> <span class="badge res-<%= resource.status %>"><%= resource.statusLabel %></span></h1>
+    <p class="page-desc"><span class="mono small"><%= resource.code %></span> · <%= resource.category.name %><%= resource.location ? ' · ' + resource.location : '' %> · <%= resource.minRoleLabel %> 이상 이용</p>
+  </div>
+  <% if (can('resource.operate') || can('resource.manage')) { %><div class="page-actions"><a class="button ghost" href="#manage">자원 관리</a></div><% } %>
+</div>
+<nav class="subnav">
+  <a href="#overview">현재 상태</a><a href="#schedule">예약 일정</a>
+  <% if (can('resource.monitor')) { %><a href="#usages">사용·반환·점검 이력</a><% } %>
+  <% if (can('resource.operate') || can('resource.manage')) { %><a href="#manage">관리</a><% } %>
+</nav>
 
-<div class="cols">
+<div class="cols" id="overview">
   <section class="card">
-    <h2>현재 상태 <span class="tag">FR-13 · FR-16 · DR-03</span></h2>
+    <h2>현재 상태</h2>
     <dl class="facts">
       <dt>상태</dt>
       <dd>
         <span class="badge res-<%= resource.status %>"><%= resource.statusLabel %></span>
-        <%= resource.assignable ? '새로 배정할 수 있음' : '새로 배정할 수 없음 (BR-08)' %>
+        <%= resource.assignable ? '새로 배정할 수 있음' : '새로 배정할 수 없음' %>
         <% if (resource.statusChangedAt) { %><span class="muted small">· <%= fmt(resource.statusChangedAt) %>부터</span><% } %>
       </dd>
       <dt>현재 사용자</dt>
@@ -35,13 +44,13 @@
     </dl>
 
     <% if (usage && (mine || can('resource.monitor'))) { %>
-      <h3>반환 <span class="tag">FR-15 · FR-16</span></h3>
+      <h3>반환</h3>
       <form method="post" action="/resources/<%= resource.id %>/return" class="form-row">
         <select name="condition"><% Object.entries(C.RETURN_CONDITION_INFO).forEach(([key, info]) => { %><option value="<%= key %>"><%= info.label %></option><% }) %></select>
         <input name="note" maxlength="500" placeholder="메모 (손상 내용 등)">
         <button>반환</button>
       </form>
-      <p class="hint">손상이면 점검이 자동으로 등록되어 점검중, 분실이면 사용불가가 됩니다. <%= mine ? '' : '사용자 대신 반환 처리합니다 (그 업무·구성원을 맡은 Capo, Underboss·Boss).' %></p>
+      <p class="hint">손상으로 반환하면 점검이 등록되어 점검중이 되고, 분실이면 사용불가가 됩니다. <%= mine ? '' : '사용자 대신 반환 처리합니다.' %></p>
     <% } %>
     <% if (usage && mine) { %>
       <div class="forms">
@@ -52,7 +61,7 @@
             <label>새 반환 예정 <input name="dueAt" type="datetime-local"></label>
           </div>
           <input name="note" maxlength="500" placeholder="메모"> <button class="ghost small">인계</button>
-          <p class="hint">업무 자원은 같은 업무의 참여자에게만 넘길 수 있습니다. 반환 예정을 늘리면 BR-07을 검사합니다.</p>
+          <p class="hint">업무 자원은 같은 업무의 참여자에게만 넘길 수 있습니다. 반환 예정을 늦추면 그 시간대 예약과 겹치지 않는지 확인합니다.</p>
         </form>
         <form method="post" action="/resource-usages/<%= usage.usageId %>/damage">
           <h3>고장 신고</h3>
@@ -77,7 +86,7 @@
   </section>
 
   <section class="card">
-    <h2>시간대 가용 여부 <span class="tag">BR-07 · BR-08</span></h2>
+    <h2>시간대 가용 여부</h2>
     <form method="get" action="/resources/<%= resource.id %>" class="form-row">
       <label>시작 <input name="from" type="datetime-local" required value="<%= query.from || '' %>"></label>
       <label>종료 <input name="to" type="datetime-local" required value="<%= query.to || '' %>"></label>
@@ -97,7 +106,7 @@
     <% } %>
 
     <% if (can('resource.allocate')) { %>
-      <h3>구성원에게 배정 <span class="tag">FR-17</span></h3>
+      <h3>구성원에게 배정</h3>
       <form method="post" action="/resources/<%= resource.id %>/allocations">
         <div class="form-row">
           <label>아이디 <input name="username" required size="12"></label>
@@ -106,16 +115,16 @@
         </div>
         <input name="purpose" maxlength="500" placeholder="용도" size="28"> <button>배정</button>
         <p class="hint">
-          점검중·사용불가 자원은 BR-08로, 같은 시간대에 다른 업무 할당·구성원 배정·사용 중인 기록이 있으면 BR-07로 거부됩니다.
-          <%= me.role === 'CAPO' ? 'Capo는 자신이 책임자인 Crew의 소속원에게만 배정할 수 있습니다(BR-05).' : '' %>
+          점검중·사용불가 자원이거나 같은 시간대에 다른 업무·구성원 배정, 사용 기록이 있으면 배정할 수 없습니다.
+          <%= me.role === 'CAPO' ? '내가 책임자인 Crew의 소속원에게만 배정할 수 있습니다.' : '' %>
         </p>
       </form>
     <% } %>
   </section>
 </div>
 
-<section class="card">
-  <h2>예약 일정 (앞으로 2주) <span class="tag">FR-15 · FR-17</span></h2>
+<section class="card" id="schedule">
+  <h2>예약 일정 (앞으로 2주)</h2>
   <div class="table-wrap">
     <table>
       <thead><tr><th>구분</th><th>시간</th><th>업무 / 구성원</th><th></th></tr></thead>
@@ -128,15 +137,15 @@
             <td><% if (i.kind === 'MEMBER' && can('resource.allocate')) { %><form method="post" action="/resource-allocations/<%= i.id %>/cancel"><button class="ghost small">배정 취소</button></form><% } %></td>
           </tr>
         <% }) %>
-        <% if (!schedule.items.length) { %><tr><td colspan="4" class="muted">앞으로 2주 동안 잡힌 예약이 없습니다.</td></tr><% } %>
+        <% if (!schedule.items.length) { %><tr><td colspan="4" class="empty">앞으로 2주 동안 잡힌 예약이 없습니다.</td></tr><% } %>
       </tbody>
     </table>
   </div>
 </section>
 
 <% if (can('resource.monitor')) { %>
-  <section class="card">
-    <h2>사용·반환 이력 <span class="tag">FR-15 · DR-03</span></h2>
+  <section class="card" id="usages">
+    <h2>사용·반환 이력</h2>
     <div class="table-wrap">
       <table>
         <thead><tr><th>사용자</th><th>근거</th><th>사용</th><th>반환</th><th>반환 상태</th></tr></thead>
@@ -153,7 +162,7 @@
               </td>
             </tr>
           <% }) %>
-          <% if (!usages.length) { %><tr><td colspan="5" class="muted">사용 기록이 없습니다.</td></tr><% } %>
+          <% if (!usages.length) { %><tr><td colspan="5" class="empty">사용 기록이 없습니다.</td></tr><% } %>
         </tbody>
       </table>
     </div>
@@ -161,7 +170,7 @@
 
   <div class="cols">
     <section class="card">
-      <h2>점검 <span class="tag">FR-16</span></h2>
+      <h2>점검</h2>
       <% if (maintenances.length) { %>
         <ul>
           <% maintenances.forEach((m) => { %>
@@ -194,7 +203,7 @@
     </section>
 
     <section class="card">
-      <h2>상태 변경 이력 <span class="tag">FR-15</span></h2>
+      <h2>상태 변경 이력</h2>
       <table>
         <thead><tr><th>시각</th><th>변경</th><th>경위</th><th>처리자</th><th>사유</th></tr></thead>
         <tbody>
@@ -208,8 +217,8 @@
 <% } %>
 
 <% if (can('resource.operate') || can('resource.manage')) { %>
-  <section class="card">
-    <h2>자원 관리 <span class="tag">FR-13 · FR-14 · FR-16</span></h2>
+  <section class="card" id="manage">
+    <h2>자원 관리</h2>
     <div class="forms">
       <% if (can('resource.operate')) { %>
         <form method="post" action="/resources/<%= resource.id %>/status">

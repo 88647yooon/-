@@ -85,7 +85,7 @@ router.get(
  *       그 업무의 자원 할당과 평가. action으로 한 행위만 볼 수 있다. 그 Crew의 책임자와 Underboss·Boss만 볼 수 있다(그 밖의 Capo는 403 BR-05).
  *     parameters:
  *       - $ref: '#/components/parameters/CrewId'
- *       - { name: action, in: query, description: '행위 코드 (예: TASK_COMPLETED, MEMBERSHIP_ADDED)', schema: { type: string } }
+ *       - { name: action, in: query, description: '행위 코드 (예: TASK_COMPLETED, MEMBERSHIP_ADDED)', schema: { $ref: '#/components/schemas/ActionCode' } }
  *       - $ref: '#/components/parameters/From'
  *       - $ref: '#/components/parameters/To'
  *       - $ref: '#/components/parameters/Page'

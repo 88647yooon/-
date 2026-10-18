@@ -63,12 +63,53 @@ function browser() {
 }
 
 describe('웹 화면 (CR-02)', () => {
-  it('홈 화면에 구현한 단계의 기능 요구사항 확인 목록과 시나리오, 테스트 계정이 보인다', async () => {
-    const res = await browser().get('/');
-    assert.equal(res.status, 200);
-    assert.match(res.type, /^text\/html/);
-    for (const text of ['기능 요구사항 확인', 'FR-01', 'FR-06', 'FR-07', 'FR-12', 'FR-13', 'FR-17', 'FR-18', 'FR-20', 'FR-21', 'FR-23', '업무 규칙 확인 시나리오', 'BR-01', 'BR-05', 'BR-03', 'BR-06', 'BR-07', 'BR-08', 'BR-10', '테스트 계정', 'underboss1']) {
-      assert.ok(res.html.includes(text), `홈 화면에 '${text}' 없음`);
+  it('첫 화면은 로그인 화면이고, 로그인하면 역할에 맞는 메뉴와 업무 홈이 나온다', async () => {
+    const b = browser();
+    const first = await b.get('/');
+    assert.equal(first.status, 302);
+    assert.equal(first.location, '/login');
+    const loginPage = await b.get('/login');
+    assert.equal(loginPage.status, 200);
+    assert.match(loginPage.type, /^text\/html/);
+    assert.ok(loginPage.html.includes('name="username"') && loginPage.html.includes('name="password"'));
+    // 실제 시스템처럼 테스트 계정·비밀번호를 화면에 드러내지 않는다 (확인 방법은 docs/requirements_check.md)
+    assert.ok(!loginPage.html.includes('underboss1') && !loginPage.html.includes(config.seedPassword));
+
+    await b.login('boss');
+    const home = await b.get('/');
+    assert.equal(home.status, 200);
+    for (const text of ['Vittorio Romano님', '진행할 업무', '처리할 일', '다가오는 일정', '운영 경고', 'href="/dashboard"', 'href="/audit-logs"']) {
+      assert.ok(home.html.includes(text), `업무 홈에 '${text}' 없음`);
+    }
+    assert.ok(!home.html.includes('href="/admin"'), 'Boss에게 시스템 관리 메뉴가 보임');
+
+    const s = browser();
+    await s.login('soldier1');
+    const soldierHome = await s.get('/');
+    for (const text of ['href="/my-tasks"', 'href="/resources"']) assert.ok(soldierHome.html.includes(text), text);
+    for (const text of ['href="/tasks"', 'href="/dashboard"', 'href="/audit-logs"']) assert.ok(!soldierHome.html.includes(text), `Soldier에게 ${text} 메뉴가 보임`);
+
+    const a = browser();
+    await a.login('admin');
+    const adminHome = await a.get('/');
+    for (const text of ['시스템 상태', '데이터 무결성', '잠긴 계정', 'href="/admin"']) assert.ok(adminHome.html.includes(text), text);
+  });
+
+  it('화면에는 요구사항 번호나 기능 확인 안내가 없다 (거부 메시지의 규정 번호만 보인다)', async () => {
+    const b = browser();
+    await b.login('boss');
+    const [task] = (await getPool().query("SELECT id FROM tasks WHERE title = '강북 정기 순찰' ORDER BY id LIMIT 1"))[0];
+    const [resource] = (await getPool().query("SELECT id FROM resources WHERE code = 'VH-002'"))[0];
+    const paths = [
+      '/', '/me', '/users', `/users/${seed.soldier3.id}`, '/crews', `/crews/${seed.Northside.id}`, '/role-requests', '/tasks', `/tasks/${task.id}`,
+      '/my-tasks', '/resources', `/resources/${resource.id}`, '/my-resources', '/evaluations', '/audit-logs', '/dashboard', `/search?q=${encodeURIComponent('강북')}`,
+    ];
+    for (const path of paths) {
+      const page = await b.get(path);
+      assert.equal(page.status, 200, path);
+      const ids = page.html.match(/\b(?:FR|BR|NFR|DR|AR|CR)-\d{2}\b/g);
+      assert.equal(ids, null, `${path}에 요구사항 번호 ${ids}`);
+      assert.ok(!page.html.includes('확인 방법') && !page.html.includes('시나리오'), path);
     }
   });
 
@@ -164,7 +205,7 @@ describe('웹 화면 (CR-02)', () => {
     await b.login('associate1');
     const res = await b.get('/users');
     assert.equal(res.status, 403);
-    assert.ok(res.html.includes('권한 없음'));
+    assert.ok(res.html.includes('접근 권한이 없습니다'));
     const event = await SecurityEvent.findOne({ 'user.username': 'associate1', path: '/users', createdAt: { $gte: started } }).lean();
     assert.ok(event, '보안 이벤트가 기록되지 않음');
   });
@@ -179,7 +220,7 @@ describe('웹 화면 (CR-02)', () => {
 
     const missing = await b.get('/no-such-page');
     assert.equal(missing.status, 404);
-    assert.ok(missing.html.includes('찾을 수 없음'));
+    assert.ok(missing.html.includes('페이지를 찾을 수 없습니다'));
     const api = await t.api('GET', '/api/no-such-api');
     assert.equal(api.status, 404);
     assert.equal(api.body.error.code, 'NOT_FOUND');
@@ -270,7 +311,7 @@ describe('자원 화면 (단계 4)', () => {
     await b.login('boss');
     const list = await b.get('/resources?q=VH-001');
     assert.equal(list.status, 200);
-    for (const text of ['이용 가능한 자원', '전체 자원 (관리용)', '진행 중인 점검', '미반환 자원', '자원 분류', '자원 등록', 'VH-001']) assert.ok(list.html.includes(text), text);
+    for (const text of ['이용 가능한 자원', '<h2>전체 자원</h2>', '진행 중인 점검', '미반환 자원', '자원 분류', '자원 등록', 'VH-001']) assert.ok(list.html.includes(text), text);
     const id = (await getPool().query("SELECT id FROM resources WHERE code = 'VH-001'"))[0][0].id;
     const detail = await b.get(`/resources/${id}`);
     for (const text of ['현재 상태', '시간대 가용 여부', '예약 일정', '사용·반환 이력', '상태 변경 이력', '자원 관리']) assert.ok(detail.html.includes(text), text);
@@ -279,7 +320,7 @@ describe('자원 화면 (단계 4)', () => {
     await s.login('soldier1');
     const soldierList = await s.get('/resources');
     assert.ok(soldierList.html.includes('이용 가능한 자원'));
-    assert.ok(!soldierList.html.includes('전체 자원 (관리용)'));
+    assert.ok(!soldierList.html.includes('<h2>전체 자원</h2>'));
     assert.equal((await s.get('/my-resources')).status, 200);
 
     const a = browser();
@@ -354,7 +395,7 @@ describe('평가·기록 화면 (단계 5)', () => {
     await s.login('soldier1');
     const own = await s.get(`/users/${(await userModel.findByUsername('soldier1')).id}`);
     assert.equal(own.status, 200);
-    for (const text of ['평판', '받은 평가', '강남 정보 수집', '변경 이력 (시간순)', '계정 등록', '활동']) assert.ok(own.html.includes(text), text);
+    for (const text of ['평판', '받은 평가', '강남 정보 수집', '변경 이력', '계정 등록', '활동']) assert.ok(own.html.includes(text), text);
     const other = await s.get(`/users/${seed.soldier3.id}`);
     assert.equal(other.status, 200);
     assert.ok(other.html.includes('class="denied"'));
@@ -477,11 +518,11 @@ describe('운영 현황·검색·관리자 화면 (단계 6)', () => {
     assert.match(reset.text, /임시 비밀번호: [A-Za-z0-9]{12}/);
   });
 
-  it('내 정보에 내 요약이, Crew 화면에 소속원별 업무량이 보인다', async () => {
+  it('업무 홈에 내 요약이, Crew 화면에 소속원별 업무량이 보인다', async () => {
     const s = browser();
     await s.login('soldier1');
-    const me = await s.get('/me');
-    assert.ok(me.html.includes('내 요약') && me.html.includes('평판 점수'));
+    const home = await s.get('/');
+    assert.ok(home.html.includes('진행할 업무') && home.html.includes('평판 점수') && home.html.includes('사용 중인 자원'));
     const c = browser();
     await c.login('capo1');
     const crew = await c.get(`/crews/${seed.Northside.id}`);
