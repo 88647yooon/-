@@ -131,7 +131,7 @@
 | 27 | PATCH | `/api/crews/:crewId` | 이름·지역·설명 수정 | FR-05 | 담당 C, U+ | 2 |
 | 28 | DELETE | `/api/crews/:crewId` | 구성원과 이력이 없는 Crew 삭제 | FR-05 | U+ | 2 |
 | 29 | PATCH | `/api/crews/:crewId/status` | 활성·해산 전환. 해산 시 모든 소속을 종료 (트랜잭션) | FR-05, FR-06 | U+ | 2 |
-| 30 | PUT | `/api/crews/:crewId/capo` | 책임자 지정·교체. 대상은 활동중인 Capo 역할이어야 하고, 정식 소속이 없으면 이 Crew에 정식으로 함께 편성 (다른 Crew 정식 소속이면 BR-01) | FR-05, BR-04 | U+ | 2 |
+| 30 | PUT | `/api/crews/:crewId/capo` | 책임자 지정·교체. 대상은 활동중인 Capo 역할이어야 하고, 정식 소속이 없으면 이 Crew에 정식으로 함께 편성 (다른 Crew 정식 소속이면 BR-01) | FR-05, BR-01 | U+ | 2 |
 | 31 | DELETE | `/api/crews/:crewId/capo` | 책임자 해제 | FR-05 | U+ | 2 |
 | 32 | PUT | `/api/crews/:crewId/underboss` | 담당 Underboss 지정 | FR-05 | B | 2 |
 | 33 | GET | `/api/crews/:crewId/capo-history` | 책임자 교체 이력 | FR-05, BR-10 | C+ | 2 |
@@ -145,18 +145,18 @@
 | 36 | GET | `/api/crews/:crewId/members/:userId` | 특정 구성원의 소속 상세 (가입일, 유형, 편성자) | FR-05 | Crew 소속원, U+ | 2 |
 | 37 | POST | `/api/crews/:crewId/members` | 구성원 편성. 다른 Crew에 정식 소속이면 거부 | FR-06, BR-01, BR-05 | 담당 C, U+ | 2 |
 | 38 | POST | `/api/crews/:crewId/members/bulk` | 여러 명 일괄 편성 (전체 성공 또는 전체 취소) | FR-06, BR-01, BR-05 | 담당 C, U+ | 2 |
-| 39 | PATCH | `/api/crews/:crewId/members/:userId` | 소속 유형 변경 (임시 → 정식) | FR-06, BR-01 | 담당 C, U+ | 2 |
+| 39 | PATCH | `/api/crews/:crewId/members/:userId` | 소속 유형 변경 (임시 → 정식) | FR-06, BR-01, BR-05 | 담당 C, U+ | 2 |
 | 40 | DELETE | `/api/crews/:crewId/members/:userId` | 구성원 제외 (소속 종료일 기록) | FR-06, BR-05 | 담당 C, U+ | 2 |
 | 41 | POST | `/api/crews/:crewId/members/:userId/transfer` | 다른 Crew로 이동 (기존 소속 종료 + 새 소속 생성, 트랜잭션) | FR-06, BR-01, BR-05 | U+ | 2 |
 | 42 | GET | `/api/crews/:crewId/candidates` | 편성 가능한 구성원 (정식 소속 없음, 활동중) | FR-06, BR-01 | 담당 C, U+ | 2 |
 | 43 | GET | `/api/crews/:crewId/membership-history` | Crew 편성 변경 이력 (가입·제외·이동) | FR-06, BR-10 | 담당 C, U+ | 2 |
-| 44 | POST | `/api/crews/merge` | 두 Crew 병합 (구성원 이동 후 원 Crew 해산, 트랜잭션) | FR-06 | U+ | 2 |
+| 44 | POST | `/api/crews/merge` | 두 Crew 병합 (구성원 이동 후 원 Crew 해산, 트랜잭션) | FR-06, BR-01 | U+ | 2 |
 
 ### 5.4 소속 신청
 
 | # | Method | URL | 기능 | 요구사항 | 권한 | 단계 |
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
-| 45 | POST | `/api/crews/:crewId/join-requests` | Crew 소속 신청 (정식 신청은 정식 소속이 없을 때만, BR-01) | FR-06 | A, S, C (본인) | 2 |
+| 45 | POST | `/api/crews/:crewId/join-requests` | Crew 소속 신청 (정식 신청은 정식 소속이 없을 때만, BR-01) | FR-06, BR-01 | A, S, C (본인) | 2 |
 | 46 | GET | `/api/crews/:crewId/join-requests` | 신청 목록 (상태 필터) | FR-06 | 담당 C, U+ | 2 |
 | 47 | POST | `/api/crews/:crewId/join-requests/:requestId/approve` | 승인 후 편성 (BR-01 재검증) | FR-06, BR-01, BR-05 | 담당 C, U+ | 2 |
 | 48 | POST | `/api/crews/:crewId/join-requests/:requestId/reject` | 거절 (사유 기록) | FR-06, BR-05 | 담당 C, U+ | 2 |
@@ -205,15 +205,15 @@
 | # | Method | URL | 기능 | 요구사항 | 권한 | 단계 |
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
 | 69 | PUT | `/api/tasks/:taskId/requirements` | 필요 인원 수, 필요 자원 분류 설정 | FR-07, FR-17 | 담당 C, U+ | 3 |
-| 70 | GET | `/api/tasks/:taskId/requirements` | 필요 조건 조회 | FR-07 | 참여자, 담당 C, U+ | 3 |
+| 70 | GET | `/api/tasks/:taskId/requirements` | 필요 조건 조회 | FR-07, FR-17 | 참여자, 담당 C, U+ | 3 |
 | 71 | POST | `/api/tasks/:taskId/notes` | 지시사항 등록 (전체 또는 특정 참여자 대상) | FR-09 | 담당 C, U+ | 3 |
 | 72 | GET | `/api/tasks/:taskId/notes` | 지시사항 목록 (참여자는 자신에게 해당하는 것만) | FR-09 | 참여자, 담당 C, U+ | 3 |
 | 73 | PATCH | `/api/tasks/:taskId/notes/:noteId` | 지시사항 수정 | FR-09 | 작성자 | 3 |
 | 74 | DELETE | `/api/tasks/:taskId/notes/:noteId` | 지시사항 삭제 | FR-09 | 작성자, U+ | 3 |
-| 75 | POST | `/api/tasks/:taskId/checklist` | 체크리스트 항목 추가 | FR-07 | 담당 C, U+ | 3 |
+| 75 | POST | `/api/tasks/:taskId/checklist` | 체크리스트 항목 추가 | FR-07, BR-06 | 담당 C, U+ | 3 |
 | 76 | GET | `/api/tasks/:taskId/checklist` | 체크리스트와 완료 현황 | FR-09, FR-10 | 참여자, 담당 C, U+ | 3 |
 | 77 | PATCH | `/api/tasks/:taskId/checklist/:itemId` | 항목 내용 수정 | FR-07 | 담당 C, U+ | 3 |
-| 78 | POST | `/api/tasks/:taskId/checklist/:itemId/check` | 항목 완료 표시 (수행자·시각 기록) | FR-10 | 참여자, 담당 C, U+ | 3 |
+| 78 | POST | `/api/tasks/:taskId/checklist/:itemId/check` | 항목 완료 표시 (수행자·시각 기록) | FR-10, BR-06 | 참여자, 담당 C, U+ | 3 |
 | 79 | DELETE | `/api/tasks/:taskId/checklist/:itemId` | 항목 삭제 | FR-07 | 담당 C, U+ | 3 |
 | 80 | POST | `/api/tasks/:taskId/dependencies` | 선행 업무 지정 (순환 참조 방지) | FR-07 | 담당 C, U+ | 3 |
 | 81 | GET | `/api/tasks/:taskId/dependencies` | 선행·후행 업무 목록 | FR-07 | 참여자, 담당 C, U+ | 3 |
@@ -233,7 +233,7 @@
 | 90 | GET | `/api/tasks/:taskId/assignment-history` | 배정·해제·교체 이력 | FR-08, FR-10 | 담당 C, U+ | 3 |
 | 91 | GET | `/api/users/:userId/availability` | 한 구성원의 지정 시간대 가용 여부와 겹치는 업무 | BR-03 | 본인, 담당 C, U+ | 3 |
 | 92 | GET | `/api/tasks/:taskId/readiness` | 시작 준비 상태 (필요 인원·자원 충족 여부, 미수락 인원) | FR-07, FR-17 | 담당 C, U+ | 3 |
-| 93 | POST | `/api/tasks/:taskId/cancel` | 업무 취소. 배정 인원과 할당 자원을 일괄 해제 (트랜잭션) | FR-10 | 담당 C, U+ | 3 |
+| 93 | POST | `/api/tasks/:taskId/cancel` | 업무 취소. 배정 인원과 할당 자원을 일괄 해제 (트랜잭션) | FR-10, BR-06 | 담당 C, U+ | 3 |
 
 ### 6.5 내 업무
 
@@ -260,9 +260,9 @@
 | 102 | POST | `/api/tasks/:taskId/complete` | 완료 처리. 결과를 기록하고 핵심 결과를 잠금 | FR-10, FR-11, BR-06 | 담당 C, U+ | 3 |
 | 103 | GET | `/api/tasks/:taskId/result` | 완료 결과 조회 | FR-11 | 참여자, 담당 C, U+ | 3 |
 | 104 | PATCH | `/api/tasks/:taskId/result` | 결과 정정 (사유 필수, 정정 이력 저장). 참여자·담당 C 등 일반 구성원이 시도하면 409 BR-06 | FR-11, BR-06 | U+ | 3 |
-| 105 | PUT | `/api/tasks/:taskId/participations/:userId` | 참여자별 참여 기록 (실제 참여 여부, 기여 내용) | FR-11 | 담당 C, U+ | 3 |
+| 105 | PUT | `/api/tasks/:taskId/participations/:userId` | 참여자별 참여 기록 (실제 참여 여부, 기여 내용) | FR-11, BR-06 | 담당 C, U+ | 3 |
 | 106 | GET | `/api/tasks/:taskId/participations` | 참여 기록 목록 | FR-11 | 참여자, 담당 C, U+ | 3 |
-| 107 | POST | `/api/tasks/:taskId/progress` | 진행 보고 (진척률, 메모) | FR-10 | 참여자 | 3 |
+| 107 | POST | `/api/tasks/:taskId/progress` | 진행 보고 (진척률, 메모) | FR-10, BR-06 | 참여자 | 3 |
 | 108 | GET | `/api/tasks/:taskId/progress` | 진행 보고 목록 | FR-10 | 참여자, 담당 C, U+ | 3 |
 | 109 | GET | `/api/tasks/:taskId/status-history` | 업무 상태 변경 이력 | FR-10 | 참여자, 담당 C, U+ | 3 |
 
@@ -285,21 +285,21 @@
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
 | 114 | POST | `/api/resources` | 자원 등록 (분류, 위치, 이용 최소 역할) | FR-13 | U+ | 4 |
 | 115 | POST | `/api/resources/bulk` | 자원 일괄 등록 (전체 성공 또는 전체 취소) | FR-13 | U+ | 4 |
-| 116 | GET | `/api/resources` | 관리용 전체 자원 목록. 상태·분류·위치 필터, 정렬, 페이지 | FR-13, FR-16, FR-21 | C+ | 4 |
-| 117 | GET | `/api/resources/available` | 내 역할과 현재 상태 기준으로 이용 가능한 자원만 조회 | FR-14 | S+ | 4 |
+| 116 | GET | `/api/resources` | 관리용 전체 자원 목록. 상태·분류·위치 필터, 정렬, 페이지 | FR-13, FR-16, FR-21, AR-03 | C+ | 4 |
+| 117 | GET | `/api/resources/available` | 내 역할과 현재 상태 기준으로 이용 가능한 자원만 조회 | FR-14, BR-07, BR-08 | S+ | 4 |
 | 118 | GET | `/api/resources/:resourceId` | 자원 상세 (현재 상태, 현재 사용자) | FR-13 | S+ | 4 |
 | 119 | PATCH | `/api/resources/:resourceId` | 기본 정보 수정 | FR-13 | U+ | 4 |
 | 120 | DELETE | `/api/resources/:resourceId` | 사용 이력이 없는 자원 삭제 | FR-13 | U+ | 4 |
-| 121 | PATCH | `/api/resources/:resourceId/status` | 상태 변경 (사용가능·점검중·사용불가) | FR-13, FR-16 | C+ | 4 |
+| 121 | PATCH | `/api/resources/:resourceId/status` | 상태 변경 (사용가능·점검중·사용불가) | FR-13, FR-16, BR-08 | C+ | 4 |
 | 122 | PATCH | `/api/resources/:resourceId/access-level` | 이용 가능한 최소 역할 변경 | FR-14 | U+ | 4 |
-| 123 | GET | `/api/resource-statuses` | 자원 상태 목록과 상태별 배정 가능 여부 | FR-16 | 로그인 | 4 |
+| 123 | GET | `/api/resource-statuses` | 자원 상태 목록과 상태별 배정 가능 여부 | FR-16, BR-08 | 로그인 | 4 |
 | 124 | GET | `/api/resources/:resourceId/status-history` | 자원 상태 변경 이력 | FR-15 | C+ | 4 |
 
 ### 7.3 자원 점검
 
 | # | Method | URL | 기능 | 요구사항 | 권한 | 단계 |
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
-| 125 | POST | `/api/resources/:resourceId/maintenances` | 점검 등록 (사유, 예정 완료일). 자원 상태를 점검중으로 전환 | FR-16 | C+ | 4 |
+| 125 | POST | `/api/resources/:resourceId/maintenances` | 점검 등록 (사유, 예정 완료일). 자원 상태를 점검중으로 전환 | FR-16, BR-08 | C+ | 4 |
 | 126 | GET | `/api/resources/:resourceId/maintenances` | 자원별 점검 이력 | FR-15, FR-16 | C+ | 4 |
 | 127 | PATCH | `/api/resources/:resourceId/maintenances/:maintenanceId` | 점검 내용·예정일 수정 | FR-16 | C+ | 4 |
 | 128 | POST | `/api/resources/:resourceId/maintenances/:maintenanceId/complete` | 점검 완료. 결과에 따라 사용가능 또는 사용불가로 전환 | FR-16 | C+ | 4 |
@@ -311,10 +311,10 @@
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
 | 130 | POST | `/api/tasks/:taskId/resources` | 업무에 자원 할당 (업무 시간대). 시간 중복·사용불가 자원은 거부 | FR-17, BR-07, BR-08 | 담당 C, U+ | 4 |
 | 131 | GET | `/api/tasks/:taskId/resources` | 업무에 할당된 자원 목록 | FR-17 | 참여자, 담당 C, U+ | 4 |
-| 132 | PATCH | `/api/tasks/:taskId/resources/:resourceId` | 할당 시간대 조정 | FR-17, BR-07 | 담당 C, U+ | 4 |
+| 132 | PATCH | `/api/tasks/:taskId/resources/:resourceId` | 할당 시간대 조정 | FR-17, BR-07, BR-08 | 담당 C, U+ | 4 |
 | 133 | DELETE | `/api/tasks/:taskId/resources/:resourceId` | 할당 해제 | FR-17 | 담당 C, U+ | 4 |
 | 134 | GET | `/api/tasks/:taskId/resource-candidates` | 이 업무에 할당 가능한 자원 (정상 상태, 시간대 비어 있음, 필요 분류 일치) | FR-14, FR-17, BR-07, BR-08 | 담당 C, U+ | 4 |
-| 135 | GET | `/api/resources/:resourceId/availability` | 한 자원의 지정 시간대 가용 여부와 겹치는 배정 | BR-07 | S+ | 4 |
+| 135 | GET | `/api/resources/:resourceId/availability` | 한 자원의 지정 시간대 가용 여부와 겹치는 배정 | BR-07, BR-08 | S+ | 4 |
 | 136 | GET | `/api/resources/:resourceId/schedule` | 자원 예약 일정 (업무·구성원 배정 타임라인) | FR-15 | S+ | 4 |
 
 ### 7.5 구성원 자원 배정
@@ -323,14 +323,14 @@
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
 | 137 | POST | `/api/resources/:resourceId/allocations` | 구성원에게 자원 배정 (시간대 지정) | FR-17, BR-07, BR-08 | 담당 C, U+ | 4 |
 | 138 | GET | `/api/users/:userId/allocations` | 구성원에게 배정된 자원 목록 | FR-14, FR-17 | 본인, 담당 C, U+ | 4 |
-| 139 | PATCH | `/api/resource-allocations/:allocationId` | 배정 기간 변경 (BR-07 재검증) | FR-17, BR-07 | 담당 C, U+ | 4 |
+| 139 | PATCH | `/api/resource-allocations/:allocationId` | 배정 기간 변경 (BR-07 재검증) | FR-17, BR-07, BR-08 | 담당 C, U+ | 4 |
 | 140 | DELETE | `/api/resource-allocations/:allocationId` | 배정 취소 | FR-17 | 담당 C, U+ | 4 |
 
 ### 7.6 자원 사용 신청
 
 | # | Method | URL | 기능 | 요구사항 | 권한 | 단계 |
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
-| 141 | POST | `/api/resource-requests` | 자원 사용 신청 (자원, 시간대, 사유) | FR-14, FR-17 | S+ | 4 |
+| 141 | POST | `/api/resource-requests` | 자원 사용 신청 (자원, 시간대, 사유) | FR-14, FR-17, BR-07, BR-08 | S+ | 4 |
 | 142 | GET | `/api/resource-requests` | 신청 목록 (내 신청, 승인 대기) | FR-17 | S+ | 4 |
 | 143 | GET | `/api/resource-requests/:requestId` | 신청 상세 | FR-17 | 신청자, 담당 C, U+ | 4 |
 | 144 | POST | `/api/resource-requests/:requestId/approve` | 승인 후 구성원 배정 생성 (BR-07, BR-08 재검증) | FR-17, BR-07, BR-08 | 담당 C, U+ | 4 |
@@ -347,7 +347,7 @@
 | 150 | GET | `/api/resources/:resourceId/usages` | 자원별 사용·반환 이력 | FR-15, DR-03 | C+ | 4 |
 | 151 | PATCH | `/api/resource-usages/:usageId` | 반환 예정 시각 연장 (BR-07 재검증) | FR-15, BR-07 | 담당 C, U+ | 4 |
 | 152 | POST | `/api/resource-usages/:usageId/handover` | 사용 중인 자원을 다른 구성원에게 인계 (반환 + 사용 시작, 트랜잭션) | FR-15, BR-07 | 사용자 | 4 |
-| 153 | POST | `/api/resource-usages/:usageId/damage-reports` | 사용 중 고장 신고. 점검을 자동 등록 | FR-16 | 사용자 | 4 |
+| 153 | POST | `/api/resource-usages/:usageId/damage-reports` | 사용 중 고장 신고. 점검을 자동 등록 | FR-16, BR-08 | 사용자 | 4 |
 | 154 | GET | `/api/resource-usages/overdue` | 반환 예정 시각이 지난 미반환 목록 | FR-15 | C+ | 4 |
 
 ---
@@ -368,9 +368,9 @@
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
 | 158 | POST | `/api/tasks/:taskId/evaluations` | 완료 업무 참여자 평가 (완료 업무만, 평가자당 대상 1회) | FR-18 | 담당 C, U+ | 5 |
 | 159 | GET | `/api/tasks/:taskId/evaluations` | 업무별 평가 목록 | FR-11, FR-19 | 담당 C, U+ | 5 |
-| 160 | GET | `/api/evaluations` | 평가 검색 (기간, Crew, 평가자, 대상자) | FR-19, FR-21 | U+ | 5 |
+| 160 | GET | `/api/evaluations` | 평가 검색 (기간, Crew, 평가자, 대상자) | FR-19, FR-21, AR-03 | U+ | 5 |
 | 161 | GET | `/api/evaluations/pending` | 내가 작성해야 할 평가 목록 | FR-18 | C+ | 5 |
-| 162 | GET | `/api/evaluations/:evaluationId` | 평가 상세 | FR-19 | 대상자, 평가자, U+ | 5 |
+| 162 | GET | `/api/evaluations/:evaluationId` | 평가 상세 | FR-19, BR-10 | 대상자, 평가자, U+ | 5 |
 | 163 | PATCH | `/api/evaluations/:evaluationId` | 평가 수정 (수정 기한 내, 수정 이력 저장) | FR-18, BR-10 | 평가자 | 5 |
 | 164 | DELETE | `/api/evaluations/:evaluationId` | 평가 철회 (사유 필수, 기록은 보존) | FR-18, BR-10 | U+ | 5 |
 | 165 | GET | `/api/users/:userId/evaluations` | 구성원이 받은 평가 이력 | FR-19 | 본인, 담당 C, U+ | 5 |
@@ -385,7 +385,7 @@
 | # | Method | URL | 기능 | 요구사항 | 권한 | 단계 |
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
 | 171 | GET | `/api/users/:userId/reputation` | 평판 요약 (평균 점수, 항목별 점수, 추세) | FR-18, FR-19 | 본인, 담당 C, U+ | 5 |
-| 172 | POST | `/api/users/:userId/reputation-events` | 업무 외 공로·징계 기록 | FR-18 | U+ | 5 |
+| 172 | POST | `/api/users/:userId/reputation-events` | 업무 외 공로·징계 기록 | FR-18, BR-10 | U+ | 5 |
 | 173 | GET | `/api/users/:userId/reputation-events` | 공로·징계 기록 목록 | FR-19 | 본인, 담당 C, U+ | 5 |
 | 174 | DELETE | `/api/reputation-events/:eventId` | 잘못된 기록 취소 (사유 필수) | FR-18, BR-10 | U+ | 5 |
 | 175 | GET | `/api/reputation/rankings` | 평판 순위 (Crew·기간 필터) | FR-22 | U+ | 5 |
@@ -423,24 +423,24 @@
 | 188 | GET | `/api/stats/regions` | 지역별 Crew·구성원 수 | FR-22 | U+ | 6 |
 | 189 | GET | `/api/stats/tasks` | 기간별 업무 상태 추이 (일·주·월 단위) | FR-22 | U+ | 6 |
 | 190 | GET | `/api/stats/tasks/lead-time` | 중요도별 업무 평균 소요 시간 | FR-22 | U+ | 6 |
-| 191 | GET | `/api/stats/resources` | 자원 상태 분포와 가동률 | FR-22 | U+ | 6 |
-| 192 | GET | `/api/stats/resources/usage-ranking` | 자원별 사용 횟수·시간 순위 | FR-22 | U+ | 6 |
-| 193 | GET | `/api/stats/evaluations` | 기간·Crew별 평균 평가 추이 | FR-22 | U+ | 6 |
+| 191 | GET | `/api/stats/resources` | 자원 상태 분포와 가동률 | FR-22, FR-16 | U+ | 6 |
+| 192 | GET | `/api/stats/resources/usage-ranking` | 자원별 사용 횟수·시간 순위 | FR-22, FR-15 | U+ | 6 |
+| 193 | GET | `/api/stats/evaluations` | 기간·Crew별 평균 평가 추이 | FR-22, FR-18 | U+ | 6 |
 | 194 | GET | `/api/stats/membership-changes` | 기간별 가입·이동·탈퇴 추이 | FR-22, BR-10 | U+ | 6 |
 | 195 | GET | `/api/stats/admin-activity` | 기간별 관리 활동 건수 | FR-20, FR-22 | B, ADM | 6 |
-| 196 | GET | `/api/stats/alerts` | 운영 경고 (반환 연체 자원, 일정이 지난 미완료 업무, 장기 점검 자원) | FR-22 | U+ | 6 |
+| 196 | GET | `/api/stats/alerts` | 운영 경고 (반환 연체 자원, 일정이 지난 미완료 업무, 장기 점검 자원) | FR-22, FR-15, FR-16 | U+ | 6 |
 | 197 | GET | `/api/crews/:crewId/workload` | Crew 구성원별 배정 업무 수·시간 | FR-12, FR-22 | 담당 C, U+ | 6 |
-| 198 | GET | `/api/me/dashboard` | 내 요약 (진행 업무, 사용 중 자원, 최근 평가) | FR-02 | 로그인 | 6 |
+| 198 | GET | `/api/me/dashboard` | 내 요약 (진행 업무, 사용 중 자원, 최근 평가) | FR-02, FR-09 | 로그인 | 6 |
 
 ### 9.3 관리자
 
 | # | Method | URL | 기능 | 요구사항 | 권한 | 단계 |
 | ---: | :--- | :--- | :--- | :--- | :--- | :--- |
 | 199 | GET | `/api/admin/accounts` | 계정 보안 현황 (마지막 로그인, 로그인 실패 횟수, 잠금 여부) | FR-23 | ADM | 6 |
-| 200 | PUT | `/api/admin/accounts/:userId/lock` | 계정 잠금 (로그인 차단, 세션 종료) | FR-23 | ADM | 6 |
+| 200 | PUT | `/api/admin/accounts/:userId/lock` | 계정 잠금 (로그인 차단, 세션 종료) | FR-23, NFR-03 | ADM | 6 |
 | 201 | DELETE | `/api/admin/accounts/:userId/lock` | 계정 잠금 해제 | FR-23 | ADM | 6 |
 | 202 | POST | `/api/admin/accounts/:userId/password-reset` | 임시 비밀번호 발급 | FR-23 | ADM | 6 |
-| 203 | DELETE | `/api/admin/accounts/:userId/sessions` | 대상 계정 강제 로그아웃 | FR-23 | ADM | 6 |
+| 203 | DELETE | `/api/admin/accounts/:userId/sessions` | 대상 계정 강제 로그아웃 | FR-23, NFR-03 | ADM | 6 |
 | 204 | GET | `/api/admin/login-history` | 로그인 성공·실패 이력 | FR-23 | ADM | 6 |
 | 205 | GET | `/api/admin/permissions` | 역할별 권한 매트릭스 | FR-23, NFR-03 | ADM | 6 |
 | 206 | PUT | `/api/admin/permissions/:role` | 역할별 권한 수정 (RBAC 미들웨어에 즉시 반영) | FR-23, NFR-03 | ADM | 6 |
@@ -515,31 +515,31 @@
 | FR-06 | 29, 37~50 |
 | FR-07 | 56~65, 67, 69~70, 75, 77, 79~82, 92 |
 | FR-08 | 83~87, 90, 97~101 |
-| FR-09 | 71~74, 76, 88, 94~96 |
+| FR-09 | 71~74, 76, 88, 94~96, 198 |
 | FR-10 | 66, 68, 76, 78, 90, 93, 102, 107~109 |
 | FR-11 | 102~106, 159 |
 | FR-12 | 61, 197 |
 | FR-13 | 110~116, 118~121 |
 | FR-14 | 117, 122, 134, 138, 141 |
-| FR-15 | 124, 126, 136, 147~152, 154 |
-| FR-16 | 116, 121, 123, 125~129, 148, 153 |
-| FR-17 | 69, 92, 130~134, 137~146 |
-| FR-18 | 158, 161, 163~164, 166~168, 170~172, 174 |
+| FR-15 | 124, 126, 136, 147~152, 154, 192, 196 |
+| FR-16 | 116, 121, 123, 125~129, 148, 153, 191, 196 |
+| FR-17 | 69~70, 92, 130~134, 137~146 |
+| FR-18 | 158, 161, 163~164, 166~168, 170~172, 174, 193 |
 | FR-19 | 14, 19, 155~157, 159~160, 162, 165, 169, 171, 173 |
 | FR-20 | 176~178, 195 |
 | FR-21 | 12, 25, 116, 160, 180~184 |
 | FR-22 | 157, 175, 185~197 |
 | FR-23 | 176, 199~208, 210 |
-| BR-01 | 37~39, 41~42, 47, 209 |
+| BR-01 | 30, 37~39, 41~42, 44~45, 47, 209 |
 | BR-02 | 83, 87, 89, 97, 99 |
 | BR-03 | 65, 83, 87, 89, 91, 97, 99, 209 |
-| BR-04 | 17, 30, 51, 54 |
-| BR-05 | 37~38, 40~41, 47~48 |
-| BR-06 | 63, 102, 104 |
-| BR-07 | 65, 130, 132, 134~135, 137, 139, 144, 151~152, 209 |
-| BR-08 | 130, 134, 137, 144 |
+| BR-04 | 17, 51, 54 |
+| BR-05 | 37~41, 47~48 |
+| BR-06 | 63, 75, 78, 93, 102, 104~105, 107 |
+| BR-07 | 65, 117, 130, 132, 134~135, 137, 139, 141, 144, 151~152, 209 |
+| BR-08 | 117, 121, 123, 125, 130, 132, 134~135, 137, 139, 141, 144, 153 |
 | BR-09 | 179 (모든 API에 RBAC 미들웨어 적용) |
-| BR-10 | 19, 33, 43, 155, 163~164, 168, 170, 174, 194 |
+| BR-10 | 19, 33, 43, 155, 162~164, 168, 170, 172, 174, 194 |
 
 ## 13. 구현 메모
 
@@ -554,4 +554,4 @@
 - #178 감사 기록 내보내기는 공통 JSON 응답 형식의 예외로 CSV 파일(UTF-8, BOM)을 그대로 돌려준다.
 - 시드 계정·초기 편성은 시드를 넣을 때 활동 기록(계정 등록, 소속 시작)도 함께 남겨, 변경 이력이 계정 등록부터 시간순으로 이어진다.
 - 단계 6부터 평가 작성·수정 기한(#158, #163), 미반환 목록의 연체 기준(#154)은 운영 설정(#207·#208)을 따른다. 로그인(#1)은 연속 실패가 잠금 기준에 이르면 계정을 잠근다.
-- 내 정보 화면(`/me`)에 내 요약(#198), Crew 상세(`/crews/:crewId`)에 소속원별 업무량(#197)을 붙였다.
+- 웹 화면의 업무 홈(`/`)에 내 요약(#198)과 운영 경고(#196)를, Crew 상세(`/crews/:crewId`)에 소속원별 업무량(#197)을 붙였다.

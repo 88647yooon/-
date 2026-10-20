@@ -20,7 +20,7 @@ const regularByDefault = { ...enums.membershipType, default: 'REGULAR' };
  *     tags: [Crew 편성]
  *     summary: 두 Crew 병합
  *     description: |
- *       [FR-06] 원 Crew(sourceCrewId)의 모든 소속원을 대상 Crew(targetCrewId)로 옮기고 원 Crew를 해산한다. 한 트랜잭션으로 처리된다.
+ *       [FR-06, BR-01] 원 Crew(sourceCrewId)의 모든 소속원을 대상 Crew(targetCrewId)로 옮기고 원 Crew를 해산한다. 한 트랜잭션으로 처리된다.
  *       원 Crew의 소속은 '병합'으로 끝나고 대상 Crew에 같은 유형으로 새 소속이 생긴다. 이미 대상 Crew에 소속된 구성원은 그대로 두되,
  *       원 Crew 정식 + 대상 Crew 임시였다면 정식으로 바꾼다. 원 Crew의 책임자는 대상 Crew의 정식 소속원이 된다.
  *     requestBody:
@@ -215,7 +215,7 @@ router.post(
  *     tags: [Crew 편성]
  *     summary: 소속 유형 변경
  *     description: |
- *       [FR-06, BR-01] 임시 ↔ 정식으로 바꾼다. 이력을 남기기 위해 기존 소속을 '소속 유형 변경'으로 끝내고 새 소속을 만든다.
+ *       [FR-06, BR-01, BR-05] 임시 ↔ 정식으로 바꾼다. 이력을 남기기 위해 기존 소속을 '소속 유형 변경'으로 끝내고 새 소속을 만든다.
  *       정식으로 바꿀 때 다른 Crew에 정식 소속이 있으면 409 BR-01이고, 책임자는 임시로 바꿀 수 없다(409).
  *     parameters:
  *       - $ref: '#/components/parameters/CrewId'

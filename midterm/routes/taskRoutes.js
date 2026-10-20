@@ -383,7 +383,7 @@ router.get('/:taskId/readiness', requirePermission('task.manage'), validate(task
  *     tags: [업무]
  *     summary: 업무 취소
  *     description: |
- *       [FR-10] 업무를 취소한다. 한 트랜잭션 안에서 현재 참여자의 배정과 할당 자원을 모두 해제하고(이유: 업무 취소) 대기 중인 교대 요청을 취소한다.
+ *       [FR-10, BR-06] 업무를 취소한다. 한 트랜잭션 안에서 현재 참여자의 배정과 할당 자원을 모두 해제하고(이유: 업무 취소) 대기 중인 교대 요청을 취소한다.
  *       이미 사용 중인 자원은 반환할 때까지 사용 기록이 남는다(업무 자원 일괄 반환 API로 돌려받는다).
  *       사유는 필수다. 완료된 업무는 취소할 수 없다(409 BR-06).
  *     parameters:
@@ -583,7 +583,7 @@ router.get('/:taskId/participations', requirePermission('task.read'), validate(t
  *     tags: [업무 진행·결과]
  *     summary: 진행 보고
  *     description: |
- *       [FR-10] 참여자가 진척률(0~100)과 메모를 보고한다. 진행 중인 업무에만 남길 수 있고(완료된 업무는 409 BR-06), 기록은 MongoDB에 쌓인다.
+ *       [FR-10, BR-06] 참여자가 진척률(0~100)과 메모를 보고한다. 진행 중인 업무에만 남길 수 있고(완료된 업무는 409 BR-06), 기록은 MongoDB에 쌓인다.
  *     parameters:
  *       - $ref: '#/components/parameters/TaskId'
  *     requestBody:

@@ -19,7 +19,7 @@ const requestParams = { params: { crewId: fields.id, requestId: fields.id } };
  *     tags: [소속 신청]
  *     summary: Crew 소속 신청
  *     description: |
- *       [FR-06] 로그인한 본인이 이 Crew에 소속을 신청한다. Associate·Soldier·Capo만 신청할 수 있다.
+ *       [FR-06, BR-01] 로그인한 본인이 이 Crew에 소속을 신청한다. Associate·Soldier·Capo만 신청할 수 있다.
  *       편성과 같은 기준으로 미리 검사해서, 이미 다른 Crew에 정식 소속인데 정식으로 신청하면 409 BR-01이다(임시 신청은 가능).
  *       같은 Crew에 처리 대기 중인 신청이 있으면 409다.
  *     parameters:

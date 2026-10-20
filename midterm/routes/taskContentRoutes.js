@@ -116,7 +116,7 @@ router.delete('/:taskId/notes/:noteId', requirePermission('task.manage'), valida
  *     tags: [업무 세부 정보]
  *     summary: 체크리스트 항목 추가
  *     description: |
- *       [FR-07] 업무를 수행하며 확인할 항목을 목록 맨 뒤에 추가한다. 완료된 업무는 409 BR-06이다.
+ *       [FR-07, BR-06] 업무를 수행하며 확인할 항목을 목록 맨 뒤에 추가한다. 완료된 업무는 409 BR-06이다.
  *     parameters:
  *       - $ref: '#/components/parameters/TaskId'
  *     requestBody:
@@ -211,7 +211,7 @@ router.delete('/:taskId/checklist/:itemId', requirePermission('task.manage'), va
  *     tags: [업무 세부 정보]
  *     summary: 체크리스트 항목 완료 표시
  *     description: |
- *       [FR-10] 참여자나 관리자가 항목을 완료로 표시한다. 누가 언제 표시했는지 남는다. done=false로 보내면 완료 표시를 지운다.
+ *       [FR-10, BR-06] 참여자나 관리자가 항목을 완료로 표시한다. 누가 언제 표시했는지 남는다. done=false로 보내면 완료 표시를 지운다.
  *       완료된 업무는 409 BR-06이다.
  *     parameters:
  *       - $ref: '#/components/parameters/TaskId'

@@ -196,6 +196,55 @@ describe('라우트·목록표·Swagger 대조 (AR-06, AR-07, CR-04)', () => {
     expectNone(problems, '예시 값이 검증에 걸리는 곳');
   });
 
+  it('API 목록표의 요구사항 열과 Swagger 설명 앞의 [요구사항]이 API마다 같다 (AR-08, 요구사항 추적표의 기준)', () => {
+    const problems = [];
+    for (const row of catalogRows(Infinity)) {
+      const op = spec.paths[toOpenApiPath(row.url)][row.method.toLowerCase()];
+      const documented = (op.description.match(/^\[([^\]]*)\]/) ?? ['', ''])[1];
+      if (documented !== row.requirements) problems.push(`#${row.no} ${row.method} ${row.url}: 목록표 [${row.requirements}] / Swagger [${documented}]`);
+    }
+    expectNone(problems, '요구사항 연결이 다른 API');
+  });
+
+  it('요구사항 추적표가 요구사항 58개를 모두 다루고, API 행이 API 목록표의 연결·실제 라우트 파일·컨트롤러와 같다', () => {
+    const doc = fs.readFileSync(path.join(__dirname, '..', 'docs', 'requirements_traceability.md'), 'utf8');
+    const controllers = new Map();
+    for (const file of fs.readdirSync(path.join(__dirname, '..', 'controllers')).filter((f) => /Controller\.js$/.test(f) && !f.startsWith('web'))) {
+      for (const [name, fn] of Object.entries(require(`../controllers/${file}`))) controllers.set(fn, `${file.replace(/\.js$/, '')}.${name}`);
+    }
+    const problems = [];
+    const ids = new Set();
+    const documented = new Set();
+    let current = null;
+    for (const line of doc.split('\n')) {
+      const cells = line.match(/^\| ([^|]*) \| ([^|]*) \| ([^|]*) \| ([^|]*) \| ([^|]*) \|$/);
+      if (!cells) continue;
+      const [, idCell, method, apiCell, where] = cells;
+      const id = idCell.match(/\*\*((?:FR|BR|DR|AR|NFR|CR)-\d{2})\*\*/)?.[1];
+      if (id) {
+        current = id;
+        ids.add(id);
+      }
+      const api = apiCell.match(/^`([^`]+)` \(#(\d+)\)$/);
+      if (!api) continue;
+      documented.add(`${current} #${api[2]}`);
+      const route = routes.find((r) => r.method === method && r.path === api[1]);
+      if (!route) {
+        problems.push(`${current} #${api[2]}: 등록되지 않은 API ${method} ${api[1]}`);
+        continue;
+      }
+      const expected = `\`${route.file}\` → \`${controllers.get(route.handler)}\``;
+      if (!where.startsWith(expected)) problems.push(`${current} #${api[2]}: 구현 위치가 실제(${expected})와 다름`);
+    }
+    const expectedPairs = catalogRows(Infinity).flatMap((r) => r.requirements.split(',').map((s) => `${s.trim()} #${r.no}`));
+    for (const pair of expectedPairs.filter((p) => !documented.has(p))) problems.push(`${pair}: 추적표에 행 없음`);
+    for (const pair of [...documented].filter((p) => !expectedPairs.includes(p))) problems.push(`${pair}: API 목록표에 없는 연결`);
+    const all = [['FR', 23], ['BR', 10], ['DR', 6], ['AR', 8], ['NFR', 5], ['CR', 6]]
+      .flatMap(([kind, n]) => Array.from({ length: n }, (_, i) => `${kind}-${String(i + 1).padStart(2, '0')}`));
+    for (const id of all.filter((x) => !ids.has(x))) problems.push(`${id}: 추적표에 없음`);
+    expectNone(problems, '추적표 문제');
+  });
+
   it('모든 기능 요구사항(FR)과 업무 규칙(BR)이 하나 이상의 API와 연결되고, 목록표의 요구사항 연결 점검 표가 실제 행과 같다 (AR-08)', () => {
     const rows = catalogRows(Infinity);
     const byId = new Map();
