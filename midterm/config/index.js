@@ -2,7 +2,7 @@
 const env = process.env;
 
 module.exports = {
-  port: Number(env.PORT) || 3000,
+  port: Number(env.PORT) || 9800,
 
   // DR-06: DB 이름에 학번(202211207)을 포함한다.
   mysql: {

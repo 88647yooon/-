@@ -34,7 +34,7 @@ async function main() {
     if (err) {
       if (err.code === 'EADDRINUSE') {
         console.error(`\n[서버 시작 실패] ${config.port}번 포트를 이미 다른 프로그램이 쓰고 있습니다.` +
-          '\n  → 그 프로그램을 종료하거나 PORT 환경 변수로 다른 포트를 지정하세요. 예: PORT=3001 node app.js\n');
+          '\n  → 그 프로그램을 종료하거나 PORT 환경 변수로 다른 포트를 지정하세요. 예: PORT=9801 node app.js\n');
       } else {
         console.error('\n[서버 시작 실패]', err);
       }

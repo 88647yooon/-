@@ -6,7 +6,7 @@ The Family 통합 정보시스템(학번 202211207)의 기능 요구사항(FR)�
 ## 1. 준비
 
 1. MySQL·MongoDB 서버를 켠 뒤 `midterm` 폴더에서 `node app.js`를 실행합니다. DB·테이블·시드 데이터는 자동으로 만들어집니다.
-2. 브라우저에서 <http://localhost:3000> 에 접속하면 로그인 화면이 나옵니다. 아래 계정의 아이디와 비밀번호를 입력합니다.
+2. 브라우저에서 <http://localhost:9800> 에 접속하면 로그인 화면이 나옵니다. 아래 계정의 아이디와 비밀번호를 입력합니다.
 3. 계정을 바꾸려면 오른쪽 위 **사용자 메뉴 → 로그아웃** 후 다른 계정으로 로그인합니다.
 4. 확인하다가 데이터가 바뀌어 처음 상태로 되돌리려면 서버를 끄고 `node app.js --reset`으로 다시 시작합니다.
 
@@ -147,7 +147,7 @@ The Family 통합 정보시스템(학번 202211207)의 기능 요구사항(FR)�
 
 ### BR-06 완료된 업무의 핵심 결과는 일반 구성원이 변경 불가
 1. capo2로 로그인 → 업무 › 업무 관리 → 상태 '완료' → 강남 정보 수집. 완료와 결과에 "결과와 참여 기록은 잠겨 있다"는 안내만 있고 정정 양식이 없다
-2. 서버 검사 확인: Swagger(<http://localhost:3000/api-docs>)에서 capo2로 로그인해 Authorize한 뒤 `PATCH /api/tasks/{taskId}/result`를 강남 정보 수집의 업무 번호(업무 화면의 `업무 #번호`, 처음 상태에서는 3)로 `{"summary": "정정 시도", "reason": "확인"}` 본문과 함께 실행 → 409, `error.code`가 `BR-06`
+2. 서버 검사 확인: Swagger(<http://localhost:9800/api-docs>)에서 capo2로 로그인해 Authorize한 뒤 `PATCH /api/tasks/{taskId}/result`를 강남 정보 수집의 업무 번호(업무 화면의 `업무 #번호`, 처음 상태에서는 3)로 `{"summary": "정정 시도", "reason": "확인"}` 본문과 함께 실행 → 409, `error.code`가 `BR-06`
 3. boss로 같은 업무 화면 → 결과 정정에서 사유를 넣어 정정하면 성공하고 정정 이력에 변경 전후가 남는다
 
 ### FR-08 업무 교대 요청과 승인
@@ -196,6 +196,6 @@ The Family 통합 정보시스템(학번 202211207)의 기능 요구사항(FR)�
 
 ## 5. Swagger에서 확인
 
-1. <http://localhost:3000/api-docs> 를 연다 (왼쪽 메뉴 맨 아래의 API 문서).
+1. <http://localhost:9800/api-docs> 를 연다 (왼쪽 메뉴 맨 아래의 API 문서).
 2. **인증 → POST /api/auth/login**을 위 계정으로 실행하고, 응답의 `data.accessToken`을 오른쪽 위 **Authorize**에 붙여 넣는다.
 3. 모든 API의 Try it out에는 검증을 통과하는 예시 값이 채워져 있어 바로 실행할 수 있다. 각 API 설명 맨 앞의 [ ] 안은 연결된 요구사항 ID이고, 전체 목록은 [API 목록표](api_catalog.md)에 있다.
