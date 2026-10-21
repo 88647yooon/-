@@ -206,11 +206,11 @@ describe('라우트·목록표·Swagger 대조 (AR-06, AR-07, CR-04)', () => {
     expectNone(problems, '요구사항 연결이 다른 API');
   });
 
-  it('요구사항 추적표가 요구사항 58개를 모두 다루고, API 행이 API 목록표의 연결·실제 라우트 파일·컨트롤러와 같다', () => {
+  it('요구사항 추적표가 요구사항 58개를 모두 다루고, API 행이 API 목록표의 연결·실제 라우트 파일·컨트롤러 파일과 같으며, 모든 행에 확인방법이 있다', () => {
     const doc = fs.readFileSync(path.join(__dirname, '..', 'docs', 'requirements_traceability.md'), 'utf8');
     const controllers = new Map();
     for (const file of fs.readdirSync(path.join(__dirname, '..', 'controllers')).filter((f) => /Controller\.js$/.test(f) && !f.startsWith('web'))) {
-      for (const [name, fn] of Object.entries(require(`../controllers/${file}`))) controllers.set(fn, `${file.replace(/\.js$/, '')}.${name}`);
+      for (const fn of Object.values(require(`../controllers/${file}`))) controllers.set(fn, `controllers/${file}`);
     }
     const problems = [];
     const ids = new Set();
@@ -219,12 +219,14 @@ describe('라우트·목록표·Swagger 대조 (AR-06, AR-07, CR-04)', () => {
     for (const line of doc.split('\n')) {
       const cells = line.match(/^\| ([^|]*) \| ([^|]*) \| ([^|]*) \| ([^|]*) \| ([^|]*) \|$/);
       if (!cells) continue;
-      const [, idCell, method, apiCell, where] = cells;
+      const [, idCell, method, apiCell, where, howToCheck] = cells;
+      if (where === '구현 위치' || where === '---') continue;
       const id = idCell.match(/\*\*((?:FR|BR|DR|AR|NFR|CR)-\d{2})\*\*/)?.[1];
       if (id) {
         current = id;
         ids.add(id);
       }
+      if (!howToCheck.trim()) problems.push(`${current} ${apiCell}: 확인방법 없음`);
       const api = apiCell.match(/^`([^`]+)` \(#(\d+)\)$/);
       if (!api) continue;
       documented.add(`${current} #${api[2]}`);
@@ -233,7 +235,11 @@ describe('라우트·목록표·Swagger 대조 (AR-06, AR-07, CR-04)', () => {
         problems.push(`${current} #${api[2]}: 등록되지 않은 API ${method} ${api[1]}`);
         continue;
       }
-      const expected = `\`${route.file}\` → \`${controllers.get(route.handler)}\``;
+      // 구현 위치는 라우트 파일, 컨트롤러 파일 순으로 시작하고, 적은 파일은 모두 실제로 있어야 한다
+      const expected = `${route.file} ${controllers.get(route.handler)}`;
+      for (const file of where.split(/\s+/).filter(Boolean)) {
+        if (!fs.existsSync(path.join(__dirname, '..', file))) problems.push(`${current} #${api[2]}: 없는 파일 ${file}`);
+      }
       if (!where.startsWith(expected)) problems.push(`${current} #${api[2]}: 구현 위치가 실제(${expected})와 다름`);
     }
     const expectedPairs = catalogRows(Infinity).flatMap((r) => r.requirements.split(',').map((s) => `${s.trim()} #${r.no}`));
